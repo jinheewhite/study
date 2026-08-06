@@ -64,6 +64,18 @@ const NAVER_KEY = "";
   #more label:first-of-type{margin-top:6px}
   .step{display:none}
   .step.on{display:block;animation:fadein .45s ease}
+  #setup{display:flex;flex-direction:column;min-height:100svh}
+  #setup.mid #dots{margin-top:8px}
+  #setup.mid .step.on{flex:1;display:flex;flex-direction:column;justify-content:center;
+    padding-bottom:6vh;text-align:center}
+  #setup.mid label{text-align:center}
+  #setup.mid input{text-align:center}
+  #setup.mid .sug{text-align:left}
+  #setup.mid .step h1{font-size:clamp(30px, 8.4vw, 46px);line-height:1.28;margin:0 0 4px}
+  #setup.mid .tiny{font-size:15px;margin:14px 0 26px}
+  #setup.mid .chips{gap:12px;margin-bottom:8px}
+  #setup.mid .chip{height:64px;font-size:17px}
+  #setup.mid input{height:58px;font-size:17px}
   @keyframes fadein{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
   .step h1{font-size:29px;line-height:1.3;margin:6px 0 0}
   .tiny{font-size:13px;color:var(--dim);margin:12px 0 18px;line-height:1.7}
@@ -102,13 +114,8 @@ const NAVER_KEY = "";
        background:repeating-linear-gradient(90deg,#ffffff1f 0 22px,#0000 22px 60px);
        animation:flow 1.1s linear infinite}
   @keyframes flow{to{background-position:-60px 0}}
-  #wing{display:none}
   #ride.plane #scene:after{content:"";position:absolute;inset:0;pointer-events:none;
     background:radial-gradient(ellipse 42% 62% at 50% 46%, #0000 0 68%, #101418 74%, #0B0E11 100%)}
-  #ride.plane #wing{display:block;position:absolute;left:-6%;bottom:4%;width:62%;height:26%;pointer-events:none;z-index:3;
-    background:linear-gradient(115deg,#B9BEC4 0 62%,#8E959C 62% 100%);
-    clip-path:polygon(0 34%,86% 0,100% 22%,96% 46%,0 78%);opacity:.92;
-    box-shadow:0 -6px 20px #0006}
   #tunnel{position:absolute;inset:0;display:none;background:#0B0C0E;overflow:hidden;z-index:6}
   #tunnel .far{position:absolute;left:50%;top:46%;width:22%;height:26%;transform:translate(-50%,-50%);
        border-radius:50% 50% 12% 12%;background:radial-gradient(#6E7A72,#1A1E20 70%);opacity:.5}
@@ -160,21 +167,21 @@ const NAVER_KEY = "";
   #stop{flex:1;position:relative;overflow:hidden}
   #stop i{position:absolute;left:0;top:0;bottom:0;width:0;background:#ffffff2e;font-style:normal}
   #stop span{position:relative}
-  #mini{position:absolute;right:12px;top:58px;width:33vw;max-width:170px;height:42vw;max-height:210px;z-index:4;
+  #mini{position:absolute;right:10px;top:54px;width:24vw;max-width:124px;height:30vw;max-height:155px;z-index:4;
        border-radius:14px;overflow:hidden;border:1px solid #ffffff55;box-shadow:0 8px 26px #000a;
        transition:width .28s ease,height .28s ease,right .28s ease,top .28s ease}
   #mini.big{width:88vw;max-width:600px;height:104vw;max-height:660px;right:6vw;top:16%}
   #mini:after{content:"";position:absolute;right:7px;bottom:7px;width:16px;height:16px;
        border-right:2px solid #ffffffcc;border-bottom:2px solid #ffffffcc;border-radius:0 0 4px 0;opacity:.75}
-  .pin{width:13px;height:13px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 5px #0007}
+  .pin{width:10px;height:10px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 5px #0007}
   .pin.me{background:#E4572E}
   .pin.goal{background:#7FD4C1}
-  #eta{position:absolute;right:12px;width:33vw;max-width:170px;z-index:4;
-    top:calc(58px + min(42vw, 210px) + 6px);pointer-events:none;transition:top .28s ease}
-  #eta .bar{height:5px;border-radius:99px;background:#ffffff30;overflow:hidden;box-shadow:0 2px 8px #0007}
+  #eta{position:absolute;right:10px;width:24vw;max-width:124px;z-index:4;
+    top:calc(54px + min(30vw, 155px) + 5px);pointer-events:none;transition:top .28s ease}
+  #eta .bar{height:4px;border-radius:99px;background:#ffffff30;overflow:hidden;box-shadow:0 2px 8px #0007}
   #eta .bar i{display:block;height:100%;width:0;border-radius:99px;background:#7FD4C1;
     transition:width .6s linear}
-  #eta span{display:block;margin-top:6px;font-size:11px;line-height:1.4;color:#DCE8E5;text-shadow:0 1px 5px #000;
+  #eta span{display:block;margin-top:5px;font-size:10px;line-height:1.35;color:#DCE8E5;text-shadow:0 1px 5px #000;
     text-align:right}
   #eta.near .bar i{background:#FFB27A}
   #eta.near span{color:#FFB27A;font-weight:600;animation:blink 1.6s ease-in-out infinite}
@@ -233,40 +240,46 @@ const NAVER_KEY = "";
   <div id="dots"></div>
 
   <section class="step" data-step="1">
-    <h1 id="q1">출발은 여기에서 할까?</h1>
+    <h1 id="q1">오늘 우리<br>집중해서 달려볼까?</h1>
+    <p class="tiny">출발은 여기에서 할까?</p>
     <button id="here">📍  응, 지금 있는 곳에서</button>
-    <p class="tiny">다른 곳에서 출발하려면 아래에서 찾아봐</p>
+    <p class="tiny" style="margin:14px 0 10px">다른 곳에서 출발하려면 아래에서 찾아봐</p>
     <input id="qFrom" placeholder="예: 전주시청, 서신동" autocomplete="off">
     <div class="sug" id="sFrom"></div>
   </section>
 
   <section class="step" data-step="2">
-    <h1>어디 갈거니?</h1>
-    <p class="tiny">무엇을 타고 갈지 먼저 고르자</p>
+    <h1>어떻게 갈거니?</h1>
+    <p class="tiny">비행기를 고르면 해외도 갈 수 있어</p>
     <div class="chips" id="modes"></div>
+  </section>
+
+  <section class="step" data-step="3">
+    <h1>어디로 갈거니?</h1>
+    <p class="tiny">가고 싶은 곳을 찾아서 눌러줘</p>
     <input id="qTo" placeholder="예: 서울역 · 비행기면 도쿄, 파리" autocomplete="off">
     <div class="sug" id="sTo"></div>
   </section>
 
-  <section class="step" data-step="3">
+  <section class="step" data-step="4">
     <h1>집중 시간은?</h1>
     <p class="tiny">그동안 폰은 내려놓는 거야</p>
     <div class="chips" id="times"></div>
   </section>
 
-  <section class="step" data-step="4">
+  <section class="step" data-step="5">
     <h1>지도로 볼까,<br>그림으로 볼까?</h1>
     <p class="tiny">가는 동안 보게 될 화면이야</p>
     <div class="chips" id="views"></div>
   </section>
 
-  <section class="step" data-step="5">
+  <section class="step" data-step="6">
     <h1>음악은 틀어줄까?</h1>
     <p class="tiny">조용한 피아노가 흐를 거야</p>
     <div class="chips" id="musics"></div>
   </section>
 
-  <section class="step" data-step="6">
+  <section class="step" data-step="7">
     <h1 id="q6">우리 출발할까?</h1>
     <div id="plan"></div>
     <p class="tiny" style="margin-top:18px">얼마나 빨리 갈까</p>
@@ -291,7 +304,6 @@ const NAVER_KEY = "";
   <div id="avatar"></div>
   <div id="water"></div>
   <div id="fx"></div>
-  <div id="wing"></div>
   <div id="satzoom"><button data-z="1">＋</button><button data-z="-1">－</button></div>
   <div id="tunnel">
     <div class="wallL"></div><div class="wallR"></div>
@@ -334,12 +346,12 @@ const MODES = [
   {id:"plane",name:"비행기", kmh:850},
   {id:"walk", name:"걷기",   kmh:10},
 ];
-const TIMES = [60, 90, 120];
+const TIMES = [25, 60, 90, 120];
 const RATES = [{n:"실시간",v:1},{n:"2배",v:2},{n:"3배",v:3},{n:"5배",v:5},{n:"미리보기",v:60}];
 const STEP_M = 45;          // 로드뷰를 갱신할 거리 간격(m)
 const STOP_SEC = 12;        // 휴게소 정차 시간(초)
 
-let mode = MODES[0], minutes = 60, rate = 1, viewMode = "map", music = true;
+let mode = MODES[0], minutes = 25, rate = 1, viewMode = "map", music = true;
 let from = null, to = null;
 let path = [], cum = [], totalM = 0;   // 경로 좌표 / 누적거리 / 총거리
 let pois = [];                          // 경로 위 휴게소·명소
@@ -419,14 +431,14 @@ function init(){
   $("#here").onclick = useHere;
 
   /* ── 한 걸음씩 ── */
-  const STEPS = 6;
+  const STEPS = 7;
   let step = 1;
   const dots = $("#dots");
   for (let i = 0; i < STEPS; i++) dots.appendChild(document.createElement("i"));
 
   function canGo(n){
     if (n === 1) return !!from;
-    if (n === 2) return !!to;
+    if (n === 3) return !!to;
     return true;
   }
   function showStep(n){
@@ -437,17 +449,20 @@ function init(){
     $("#prev").style.visibility = step === 1 ? "hidden" : "visible";
     $("#next").style.display = step === STEPS ? "none" : "";
     $("#next").disabled = !canGo(step);
+    $("#setup").classList.toggle("mid", step < STEPS);
     if (step === STEPS){
       $("#q6").innerHTML = "우리 출발할까?";
       refresh();
     }
     window.scrollTo(0, 0);
   }
+  window.showStep = showStep;
+  window.refreshNav = () => { $("#next").disabled = !canGo(step); };
   $("#prev").onclick = () => showStep(step - 1);
   $("#next").onclick = () => showStep(step + 1);
 
   /* 고르면 저절로 다음으로 */
-  ["#times", "#views", "#musics"].forEach(sel => {
+  ["#modes", "#times", "#views", "#musics"].forEach(sel => {
     $(sel).addEventListener("click", (e) => {
       if (e.target.tagName === "BUTTON") setTimeout(() => showStep(step + 1), 260);
     });
@@ -528,12 +543,11 @@ async function check(){
     $("#hint").textContent = !from && !to ? "출발지와 목적지를 목록에서 골라 주세요."
       : (!from ? "출발지를 목록에서 눌러 골라 주세요." : "목적지를 목록에서 눌러 골라 주세요.");
     $("#plan").style.display = "none";
-    const nb = $("#next");
-    if (nb) nb.disabled = !(typeof step !== "undefined" && step === 1 ? !!from : !!to);
+    if (window.refreshNav) window.refreshNav();
     return;
   }
   $("#hint").textContent = `${from.name} → ${to.name}`;
-  const nx = $("#next"); if (nx) nx.disabled = false;
+  if (window.refreshNav) window.refreshNav();
   $("#plan").style.display = "block";
   $("#plan").innerHTML = "경로를 계산하는 중…";
   path = []; cum = []; totalM = 0;
@@ -1006,10 +1020,10 @@ function applyName(n){
   put("ride:name", NAME);
   loadMsgs();
   $("#intro").style.display = "none";
-  $("#setup").style.display = "block";
+  $("#setup").style.display = "flex";
   $("#brand").textContent = NAME + "의 프로젝트";
-  if (typeof showStep === "function") showStep(1);
-  const q1 = $("#q1"); if (q1) q1.innerHTML = voc(NAME) + ",<br>출발은 여기에서 할까?";
+  if (window.showStep) window.showStep(1);
+  const q1 = $("#q1"); if (q1) q1.innerHTML = voc(NAME) + ",<br>오늘 우리<br>집중해서 달려볼까?";
   document.title = NAME + "의 프로젝트";
   renderStamps();
 }
@@ -1877,7 +1891,6 @@ function applyView(){
   $("#scene").style.display = sceneOn ? "block" : "none";
   $("#sat").style.display   = satOn ? "block" : "none";
   $("#satzoom").style.display = satOn ? "flex" : "none";
-  $("#wing").style.display  = (isPlane() && (sceneOn || satOn)) ? "block" : "none";
   $("#swap").textContent = viewMode === "map" ? ((hasNaver() && !isPlane()) ? "거리뷰" : "그림")
     : viewMode === "road" ? "그림" : "지도";
   if (satOn){
