@@ -82,7 +82,8 @@ const NAVER_KEY = "";
   #dots{display:flex;gap:7px;margin:18px 0 22px}
   #dots i{flex:1;height:4px;border-radius:99px;background:var(--line)}
   #dots i.on{background:var(--dawn)}
-  #nav{display:flex;gap:10px;margin-top:30px}
+  #warn{min-height:20px;margin:14px 0 0;font-size:13px;color:var(--dawn);text-align:center}
+  #nav{display:flex;gap:10px;margin-top:12px}
   #nav button{flex:1;height:52px;border-radius:12px;font-size:15px;font-family:inherit;border:1px solid var(--line);
     background:var(--panel);color:#8FA9A4}
   #nav #next{background:var(--dawn);color:var(--ink);border:0;font-weight:700}
@@ -290,6 +291,7 @@ const NAVER_KEY = "";
     <button id="switch">이름 바꾸기</button>
   </section>
 
+  <p id="warn"></p>
   <div id="nav">
     <button id="prev">이전</button>
     <button id="next">다음</button>
@@ -448,7 +450,7 @@ function init(){
     dots.querySelectorAll("i").forEach((el, i) => el.classList.toggle("on", i < step));
     $("#prev").style.visibility = step === 1 ? "hidden" : "visible";
     $("#next").style.display = step === STEPS ? "none" : "";
-    $("#next").disabled = !canGo(step);
+    $("#warn").textContent = "";
     $("#setup").classList.toggle("mid", step < STEPS);
     if (step === STEPS){
       $("#q6").innerHTML = "우리 출발할까?";
@@ -457,9 +459,46 @@ function init(){
     window.scrollTo(0, 0);
   }
   window.showStep = showStep;
-  window.refreshNav = () => { $("#next").disabled = !canGo(step); };
+  window.refreshNav = () => { if (canGo(step)) $("#warn").textContent = ""; };
   $("#prev").onclick = () => showStep(step - 1);
-  $("#next").onclick = () => showStep(step + 1);
+  /* 칸에 글자만 있어도 알아서 찾아준다 */
+  function resolve(which){
+    const q = $(which === "from" ? "#qFrom" : "#qTo").value.trim();
+    if (!q) return Promise.resolve(null);
+    if (isPlane()){
+      return worldSearch(q).then(list => list[0] || null).catch(() => null)
+        .then(hit => hit || kakaoFirst(q));
+    }
+    return kakaoFirst(q);
+  }
+  function kakaoFirst(q){
+    return new Promise(res => {
+      ps.keywordSearch(q, (d, st) => {
+        if (st === kakao.maps.services.Status.OK && d.length)
+          res({ name:d[0].place_name, lat:+d[0].y, lng:+d[0].x });
+        else res(null);
+      });
+    });
+  }
+
+  $("#next").onclick = async () => {
+    if (canGo(step)){ showStep(step + 1); return; }
+
+    const which = (step === 1) ? "from" : "to";
+    $("#warn").textContent = "찾아보는 중…";
+    const hit = await resolve(which);
+    if (hit){
+      if (which === "from"){ from = hit; $("#qFrom").value = hit.name; $("#sFrom").innerHTML = ""; }
+      else { to = hit; $("#qTo").value = hit.name; $("#sTo").innerHTML = ""; }
+      $("#warn").textContent = "";
+      check();
+      showStep(step + 1);
+      return;
+    }
+    $("#warn").textContent = which === "from"
+      ? "출발할 곳을 못 찾았어 · 위 버튼을 누르거나 다시 검색해줘"
+      : "그런 곳을 못 찾았어 · 다른 이름으로 검색해줘";
+  };
 
   /* 고르면 저절로 다음으로 */
   ["#modes", "#times", "#views", "#musics"].forEach(sel => {
