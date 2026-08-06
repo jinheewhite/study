@@ -14,10 +14,20 @@
 /* ───────── 설정 ───────── */
 const KAKAO_JS_KEY = "d99f29b83599b2aa7c33cbe33a1662d5";  // developers.kakao.com > 내 애플리케이션 > 앱 키
 const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프록시
+
+/* 네이버 거리뷰를 쓰려면 네이버 클라우드에서 받은 키를 넣으세요.
+   비워두면 거리뷰 항목이 아예 나타나지 않습니다. */
+const NAVER_KEY = "";
 </script>
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=d99f29b83599b2aa7c33cbe33a1662d5&libraries=services&autoload=false" id="sdk"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script>
+  if (typeof NAVER_KEY !== "undefined" && NAVER_KEY){
+    document.write('<scr' + 'ipt src="https://openapi.map.naver.com/openapi/v3/maps.js?ncpKeyId='
+      + NAVER_KEY + '&submodules=panorama"></scr' + 'ipt>');
+  }
+</script>
 <style>
   :root{ --ink:#0C1719; --panel:#101F21; --line:#1E3F39; --dawn:#FFB27A; --mint:#7FD4C1; --paper:#E9EEE9; --dim:#5C7C76; }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -56,15 +66,14 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
 
   /* 주행 화면 */
   #ride{display:none;position:fixed;inset:0;background:#000}
-  #rv{position:absolute;inset:0}
   #scene{position:absolute;inset:0;display:none}
   #sat{position:absolute;inset:0;display:none;background:#0B0E11;z-index:1}
+  #road{position:absolute;inset:0;display:none;background:#0B0E11;z-index:1}
   #sat:after{content:"";position:absolute;inset:0;pointer-events:none;
     background:radial-gradient(ellipse 44% 64% at 50% 46%, #0000 0 66%, #101418 74%, #0B0E11 100%)}
   #satzoom{position:absolute;right:14px;top:46%;display:none;flex-direction:column;gap:8px;z-index:5}
   #satzoom button{width:42px;height:42px;border-radius:12px;border:1px solid #ffffff44;
     background:#00000055;color:#EAF2EF;font-size:19px;font-family:inherit;backdrop-filter:blur(6px)}
-  #satcap{position:absolute;left:10px;bottom:6px;font-size:9px;color:#ffffff66;pointer-events:none;z-index:5}
   #scene svg{width:100%;height:100%;display:block}
   #water{position:absolute;left:0;right:0;bottom:0;height:26%;display:none;z-index:2;
        background:linear-gradient(#5E7E92,#40607A);opacity:.96}
@@ -92,6 +101,11 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
   @keyframes lamp{to{background-position:-120px 0}}
   #tunnel .tname{position:absolute;left:0;right:0;top:52%;text-align:center;color:#E8E4DC;font-size:15px;
        letter-spacing:.05em;text-shadow:0 1px 6px #000}
+  #avatar{position:absolute;left:50%;top:50%;transform:translate(-50%,-100%);pointer-events:none;
+    z-index:6;display:none;width:96px;text-align:center}
+  #avatar svg{width:96px;height:96px;display:block;filter:drop-shadow(0 4px 8px #0007)}
+  #avatar b{display:block;margin-top:-6px;font-size:12px;font-weight:600;color:#fff;
+    background:#E4572ECC;border-radius:999px;padding:3px 10px;text-shadow:0 1px 3px #0008}
   #fx{position:absolute;inset:0;pointer-events:none;z-index:3}
   #fx.rain:before,#fx.storm:before{content:"";position:absolute;inset:-20%;
     background:repeating-linear-gradient(105deg,#ffffff55 0 1px,#0000 1px 9px);
@@ -131,6 +145,9 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
   #mini.big{width:88vw;max-width:600px;height:78vw;max-height:660px;right:6vw;top:20%}
   #mini:after{content:"";position:absolute;right:7px;bottom:7px;width:16px;height:16px;
        border-right:2px solid #ffffffcc;border-bottom:2px solid #ffffffcc;border-radius:0 0 4px 0;opacity:.75}
+  .pin{width:13px;height:13px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 5px #0007}
+  .pin.me{background:#E4572E}
+  .pin.goal{background:#7FD4C1}
   #eta{position:absolute;right:14px;width:58vw;max-width:280px;z-index:4;
     top:calc(84px + min(72vw, 340px) + 8px);pointer-events:none;transition:top .28s ease}
   #eta .bar{height:6px;border-radius:99px;background:#ffffff30;overflow:hidden;box-shadow:0 2px 8px #0007}
@@ -148,29 +165,26 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
        padding:12px 22px;border-radius:999px;font-size:17px}
   #banner em{display:block;font-style:normal;font-size:13px;color:#DCE8E5;margin-top:10px;text-shadow:0 1px 4px #000}
   #place{position:absolute;left:6%;right:6%;top:9%;z-index:8;text-align:center;pointer-events:none;opacity:0;
-    transition:opacity 2s ease;color:#F4F1E8;font-size:19px;font-weight:300;letter-spacing:.2em;
-    line-height:1.5;text-shadow:0 2px 18px #000,0 0 42px #000A}
-  #place small{display:block;font-size:11px;letter-spacing:.3em;color:#B9D6D0;margin-bottom:10px;font-weight:400}
-  #quote{position:absolute;left:3%;right:3%;top:17%;z-index:10;text-align:center;pointer-events:none;opacity:0;
+    transition:opacity 2s ease;color:#1E3A66;font-size:19px;font-weight:700;letter-spacing:.2em;
+    line-height:1.5;paint-order:stroke fill;-webkit-text-stroke:4px #FFFFFFD0}
+  #place small{display:block;font-size:11px;letter-spacing:.3em;color:#2E5580;margin-bottom:10px;font-weight:700;
+    paint-order:stroke fill;-webkit-text-stroke:3px #FFFFFFC8}
+  #quote{position:absolute;left:3%;right:3%;top:15%;z-index:10;text-align:center;pointer-events:none;opacity:0;
+    padding:26px 18px;
     transform:translateY(14px) scale(.97);filter:blur(7px);
-    transition:opacity 3.4s ease, transform 3.4s ease, filter 3.4s ease;color:#F2EFE6;font-size:clamp(22px, 5.6vw, 36px);line-height:1.7;letter-spacing:-.01em;
-    text-shadow:0 2px 10px #000,0 0 26px #0009}
-  #quote.mom{color:#FFF3E2;font-size:clamp(34px, 9vw, 62px);font-weight:600;line-height:1.5;letter-spacing:.02em;
-    text-shadow:0 2px 16px #000, 0 0 34px #000B, 0 0 22px #FFD9A055, 0 0 46px #FFC98033;
-    animation:twinkle 6.5s ease-in-out infinite}
-  @keyframes twinkle{
-    0%,100%{text-shadow:0 2px 16px #000,0 0 34px #000B,0 0 20px #FFD9A044,0 0 42px #FFC98022}
-    50%    {text-shadow:0 2px 16px #000,0 0 34px #000B,0 0 34px #FFE9BC88,0 0 68px #FFD59A55}}
+    transition:opacity 3.4s ease, transform 3.4s ease, filter 3.4s ease;
+    color:#16305C;font-weight:700;font-size:clamp(22px, 5.6vw, 36px);line-height:1.7;letter-spacing:-.01em;
+    paint-order:stroke fill;-webkit-text-stroke:5px #FFFFFFE0;
+    text-shadow:0 1px 4px #FFFFFFC0}
+  #quote.mom{color:#16305C;font-size:clamp(34px, 9vw, 62px);font-weight:800;line-height:1.5;letter-spacing:.01em;
+    paint-order:stroke fill;-webkit-text-stroke:6px #FFFFFFE0;
+    text-shadow:0 1px 5px #FFFFFFCC}
   #quote.on{opacity:1;transform:none;filter:blur(0)}
   #quote.out{transition-duration:4.5s}
   #quote .sig{display:block;opacity:0;transition:opacity 2.6s ease 1.6s}
   #quote.on .sig{opacity:1}
   #quote .sig{display:block;margin-top:30px;font-size:clamp(15px, 3.6vw, 22px);color:#FFC48C;letter-spacing:.34em;
     text-shadow:0 1px 8px #000}
-  #quote.mom .stars{position:absolute;inset:-14% -8%;pointer-events:none}
-  #quote.mom .stars i{position:absolute;display:block;width:3px;height:3px;border-radius:50%;
-    background:#FFF6E0;box-shadow:0 0 7px 2px #FFE6B0AA;opacity:0;animation:spark 4.6s ease-in-out infinite}
-  @keyframes spark{0%,100%{opacity:0;transform:scale(.4)}45%{opacity:1;transform:scale(1.25)}}
   #ready2{margin-top:22px;font-size:14px;color:var(--mint);line-height:1.8}
   #countdown{position:absolute;inset:0;z-index:20;background:var(--ink);display:flex;flex-direction:column;
        align-items:center;justify-content:center;gap:18px;z-index:5}
@@ -233,13 +247,13 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
 
 <!-- ══════════ 주행 화면 ══════════ -->
 <div id="ride">
-  <div id="rv"></div>
   <div id="scene"></div>
   <div id="sat"></div>
+  <div id="road"></div>
+  <div id="avatar"></div>
   <div id="water"></div>
   <div id="fx"></div>
   <div id="wing"></div>
-  <div id="satcap">Esri · Maxar · Earthstar Geographics</div>
   <div id="satzoom"><button data-z="1">＋</button><button data-z="-1">－</button></div>
   <div id="tunnel">
     <div class="wallL"></div><div class="wallR"></div>
@@ -260,7 +274,6 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
     <div id="ctrl">
       <button id="tune">♪ 켬</button>
       <button id="swap">그림</button>
-      <button id="look">둘러보기</button>
       <button id="stop"><i></i><span>길게 눌러 중단</span></button>
     </div>
   </div>
@@ -281,19 +294,19 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
 const MODES = [
   {id:"car",  name:"자가용", kmh:85},
   {id:"plane",name:"비행기", kmh:850},
-  {id:"walk", name:"걷기",   kmh:4.5},
+  {id:"walk", name:"걷기",   kmh:10},
 ];
 const TIMES = [60, 90, 120];
 const RATES = [{n:"실시간",v:1},{n:"2배",v:2},{n:"3배",v:3},{n:"5배",v:5},{n:"미리보기",v:60}];
 const STEP_M = 45;          // 로드뷰를 갱신할 거리 간격(m)
 const STOP_SEC = 12;        // 휴게소 정차 시간(초)
 
-let mode = MODES[0], minutes = 60, rate = 1, viewMode = "real", music = true;
+let mode = MODES[0], minutes = 60, rate = 1, viewMode = "map", music = true;
 let from = null, to = null;
 let path = [], cum = [], totalM = 0;   // 경로 좌표 / 누적거리 / 총거리
 let pois = [];                          // 경로 위 휴게소·명소
-let rv, rvc, mini, miniLine, miniDot, ps, geo;
-let travelled = 0, elapsed = 0, startTs = 0, lastPano = null, lastRegionAt = -1e9;
+let mini, miniLine, miniDot, ps, geo;
+let travelled = 0, elapsed = 0, startTs = 0, lastRegionAt = -1e9;
 let pausedUntil = 0, timer = null, holdTimer = null, hold = 0, locked = false, finished = false;
 
 const $ = (s) => document.querySelector(s);
@@ -325,8 +338,9 @@ chips("#modes", MODES.map(m=>({label:`${m.name} ${m.kmh}km/h`, value:m})), ()=>m
 });
 chips("#times", TIMES.map(t=>({label:t+"분", value:t})), ()=>minutes, v=>minutes=v);
 chips("#rates", RATES.map(r=>({label:r.n, value:r.v})), ()=>rate, v=>rate=v);
-chips("#views", [{label:"실사 로드뷰",value:"real"},{label:"위성 사진",value:"sat"},{label:"그림 풍경",value:"draw"}],
-      ()=>viewMode, v=>viewMode=v);
+const VIEWS = [{label:"지도",value:"map"},{label:"그림 풍경",value:"draw"}];
+if (NAVER_KEY) VIEWS.splice(1, 0, {label:"거리뷰",value:"road"});
+chips("#views", VIEWS, ()=>viewMode, v=>viewMode=v);
 chips("#musics", [{label:"켜기",value:true},{label:"끄기",value:false}], ()=>music, v=>music=v);
 
 /* ───────── SDK 로드 ───────── */
@@ -853,7 +867,7 @@ const DEFAULT_MSG = [
   "{보낸이} 사랑은\n{이름}가 어떤 날이든 똑같아",
   "{호칭} 오늘 수고했어\n진짜로",
 ];
-const DEFAULT_FROM = "엄마";
+const DEFAULT_FROM = "";      // 서명은 표시하지 않습니다
 
 let NAME = "", MOM = [], FROM = DEFAULT_FROM;
 
@@ -955,12 +969,7 @@ function showQuote(){
   const useMom = MOM.length && Math.random() < 0.55;
   if (useMom){
     q.classList.add("mom");
-    let stars = '<span class="stars">';
-    for (let i = 0; i < 22; i++)
-      stars += `<i style="left:${(Math.random()*100).toFixed(1)}%;top:${(Math.random()*100).toFixed(1)}%;`
-             + `animation-delay:${(Math.random()*4.6).toFixed(2)}s"></i>`;
-    stars += "</span>";
-    q.innerHTML = stars + randMsg() + (FROM ? '<span class="sig">— ' + esc(FROM) + '</span>' : "");
+    q.innerHTML = randMsg() + (FROM ? '<span class="sig">— ' + esc(FROM) + '</span>' : "");
   } else {
     q.classList.remove("mom");
     q.innerHTML = esc(fill(pickQuote()));
@@ -1078,13 +1087,23 @@ function miniLevel(){
   return 9;
 }
 
+function fitMini(){
+  if (!mini || !path.length) return;
+  const b = new kakao.maps.LatLngBounds();
+  path.forEach(q => b.extend(new kakao.maps.LatLng(q.lat, q.lng)));
+  mini.setBounds(b, 14, 14, 14, 14);
+}
+
 function buildMap(){
   if (isPlane()){
     $("#ride").className = "plane";
-    if (viewMode === "real") viewMode = "sat";
     buildWorldMap();
     $("#swap").style.display = "";
-    $("#swap").onclick = () => { viewMode = (viewMode === "draw") ? "sat" : "draw"; applyView(); };
+    $("#swap").onclick = () => {
+    const ring = (hasNaver() && !isPlane()) ? ["map","road","draw"] : ["map","draw"];
+    viewMode = ring[(ring.indexOf(viewMode) + 1) % ring.length];
+    applyView();
+  };
     $("#tune").onclick = toggleMusic;
     $("#tune").textContent = music ? "♪ 켬" : "♪ 끔";
     $("#mini").onclick = () => {
@@ -1095,31 +1114,26 @@ function buildMap(){
     bindHold();
     return;
   }
-  rv  = new kakao.maps.Roadview($("#rv"));
-  rvc = new kakao.maps.RoadviewClient();
   mini = new kakao.maps.Map($("#mini"), { center:new kakao.maps.LatLng(from.lat, from.lng),
-                                          level:miniLevel(), draggable:false });
+                                          level:9, draggable:false });
   new kakao.maps.Polyline({
     map:mini, strokeWeight:4, strokeColor:"#C08A50", strokeOpacity:.7,
     path:path.filter((_,i)=>i%4===0).map(p=>new kakao.maps.LatLng(p.lat,p.lng))
   });
   miniLine = new kakao.maps.Polyline({ map:mini, strokeWeight:5, strokeColor:"#E4572E", strokeOpacity:1, path:[] });
-  new kakao.maps.Circle({ map:mini, center:new kakao.maps.LatLng(to.lat, to.lng), radius:1300,
-                          fillColor:"#7FD4C1", fillOpacity:.9, strokeWeight:2, strokeColor:"#0C1719" });
-  miniDot  = new kakao.maps.Circle({ map:mini, center:new kakao.maps.LatLng(from.lat,from.lng), radius:900,
-                                     fillColor:"#E4572E", fillOpacity:1, strokeWeight:2, strokeColor:"#fff" });
-  $("#look").onclick = () => rv.setViewpoint({ pan:(rv.getViewpoint().pan + 60) % 360, tilt:0, zoom:0 });
+  new kakao.maps.CustomOverlay({ map:mini, position:new kakao.maps.LatLng(to.lat, to.lng), zIndex:2,
+    content:'<div class="pin goal"></div>', xAnchor:0.5, yAnchor:0.5 });
+  miniDot = new kakao.maps.CustomOverlay({ map:mini, position:new kakao.maps.LatLng(from.lat, from.lng),
+    zIndex:3, content:'<div class="pin me"></div>', xAnchor:0.5, yAnchor:0.5 });
+  fitMini();
   $("#swap").onclick = () => {
-    viewMode = isPlane() ? (viewMode === "draw" ? "sat" : "draw")
-                         : (viewMode === "draw" ? "real" : "draw");
+    const ring = (hasNaver() && !isPlane()) ? ["map","road","draw"] : ["map","draw"];
+    viewMode = ring[(ring.indexOf(viewMode) + 1) % ring.length];
     applyView();
   };
   $("#mini").onclick = () => {
-    const el = $("#mini");
-    el.classList.toggle("big");
-    const c = miniDot.getPosition();
-    mini.setLevel(el.classList.contains("big") ? Math.max(2, miniLevel() - 2) : miniLevel());
-    setTimeout(() => { mini.relayout(); mini.setCenter(c); }, 300);
+    $("#mini").classList.toggle("big");
+    setTimeout(() => { mini.relayout(); fitMini(); }, 300);
   };
   $("#tune").onclick = toggleMusic;
   $("#tune").textContent = music ? "♪ 켬" : "♪ 끔";
@@ -1194,15 +1208,193 @@ async function whereInWorld(lat, lng){
 }
 
 /* 위성 사진 — 키 없이 쓸 수 있는 Esri 타일 */
-let satMap = null;
+let satMap = null, satKakao = null, satTiles = null, satTileNow = "";
+
+/* 국내는 카카오 스카이뷰 — 훨씬 선명합니다. 해외는 전 세계 위성 타일. */
 function buildSat(){
+  if (!isPlane()){
+    if (satKakao) return;
+    satKakao = new kakao.maps.Map($("#sat"), {
+      center: new kakao.maps.LatLng(from.lat, from.lng),
+      level: satLevel(), draggable:false, scrollwheel:false,
+      disableDoubleClickZoom:true, keyboardShortcuts:false
+    });
+    meOverlay = new kakao.maps.CustomOverlay({
+      map: satKakao, position: new kakao.maps.LatLng(from.lat, from.lng),
+      content: meContent(1), yAnchor: 1, zIndex: 5,
+    });
+    setTimeout(() => satKakao.relayout(), 80);
+    return;
+  }
   if (satMap) return;
   satMap = L.map($("#sat"), { zoomControl:false, attributionControl:false, dragging:false,
                               scrollWheelZoom:false, doubleClickZoom:false, keyboard:false,
                               zoomAnimation:false, fadeAnimation:false });
-  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-              { maxZoom: 17 }).addTo(satMap);
+  satTiles = {
+    map: L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom:17 }),
+  };
+  satTiles.map.addTo(satMap);
   satMap.setView([from.lat, from.lng], satZoom());
+}
+
+/* 카카오 축척 — 숫자가 작을수록 가깝습니다 */
+function satLevel(){
+  const base = mode.kmh <= 10 ? 1 : mode.kmh <= 120 ? 3 : 9;   // 걷기는 가게 이름까지
+  return Math.max(1, Math.min(12, base - satAdj));
+}
+
+/* ── 지도 위를 걸어가는 여고생 ── */
+let meOverlay = null, meDir = 1;
+
+function girlSVG(dir, moving){
+  const A = 22, dur = "0.9s";
+  const sw = (a, b, cx, cy) => moving
+    ? `<animateTransform attributeName="transform" type="rotate"
+         values="${a} ${cx} ${cy};${b} ${cx} ${cy};${a} ${cx} ${cy}" dur="${dur}" repeatCount="indefinite"/>` : "";
+  const bob = moving
+    ? `<animateTransform attributeName="transform" type="translate"
+         values="0 0;0 -0.45;0 0;0 -0.45;0 0" dur="${dur}" repeatCount="indefinite"/>` : "";
+  return `<svg width="46" height="58" viewBox="-9 -21 18 23" xmlns="http://www.w3.org/2000/svg"
+    style="filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))">
+    <ellipse cx="0" cy="0.4" rx="3.4" ry="1" fill="#000" opacity=".22"/>
+    <g transform="scale(${dir} 1)"><g>${bob}
+      <rect x="1.5" y="-9.4" width="2.7" height="2.6" rx=".7" fill="#C98F4B"/>
+      <g>${sw(A,-A,-2.2,-12.4)}<rect x="-2.75" y="-12.5" width="1.1" height="4.3" rx=".55" fill="#E8E8E8"/>
+        <circle cx="-2.2" cy="-8.1" r=".7" fill="#F2CDAF"/></g>
+      <g>${sw(-A-2,A+2,-0.7,-5.4)}<rect x="-1.45" y="-5.5" width="1.5" height="4.7" rx=".75" fill="#F2CDAF"/>
+        <rect x="-1.8" y="-1.2" width="2.1" height="1.2" rx=".6" fill="#553826"/></g>
+      <g>${sw(A+2,-A-2,0.7,-5.4)}<rect x="-.05" y="-5.5" width="1.5" height="4.7" rx=".75" fill="#FFE2C6"/>
+        <rect x="-.3" y="-1.2" width="2.1" height="1.2" rx=".6" fill="#6B4A38"/></g>
+      <g>${sw(3,-3,0,-8.6)}<path d="M-2.4 -8.7 L2.4 -8.7 L3.5 -4.7 L-3.5 -4.7 Z" fill="#2A5A6E"/></g>
+      <path d="M-2.3 -12.9 L2.3 -12.9 L2.5 -8.4 L-2.5 -8.4 Z" fill="#FFF"/>
+      <path d="M-2.1 -12.9 L0 -10.3 L2.1 -12.9 L1.1 -13.1 L0 -11.7 L-1.1 -13.1 Z" fill="#3E8E86"/>
+      <path d="M-1 -10.6 L0 -10.1 L1 -10.6 L.4 -9.6 L-.4 -9.6 Z" fill="#E8563F"/>
+      <rect x="-.55" y="-13.4" width="1.1" height="1.1" fill="#F2CDAF"/>
+      <ellipse cx="0" cy="-15.7" rx="3.2" ry="3.4" fill="#4A322C"/>
+      <rect x="-3.5" y="-16.3" width="1.4" height="4.8" rx=".7" fill="#4A322C"/>
+      <rect x="2.1" y="-16.3" width="1.4" height="4.8" rx=".7" fill="#4A322C"/>
+      <circle cx="0" cy="-15.2" r="2.5" fill="#FFE2C6"/>
+      <path d="M-2.8 -16.1 Q0 -19.4 2.8 -16.1 Q1.4 -17.5 0 -17.2 Q-1.4 -17.5 -2.8 -16.1 Z" fill="#4A322C"/>
+      <ellipse cx="-1.5" cy="-14.5" rx=".6" ry=".4" fill="#FF9E8A" opacity=".6"/>
+      <ellipse cx="1.5" cy="-14.5" rx=".6" ry=".4" fill="#FF9E8A" opacity=".6"/>
+      <circle cx="-.85" cy="-15.1" r=".33" fill="#2A1F1C"/>
+      <circle cx=".85" cy="-15.1" r=".33" fill="#2A1F1C"/>
+      <path d="M-.5 -14.1 Q0 -13.7 .5 -14.1" stroke="#2A1F1C" stroke-width=".22" fill="none" stroke-linecap="round"/>
+      <g>${sw(-A,A,2.2,-12.4)}<rect x="1.65" y="-12.5" width="1.1" height="4.3" rx=".55" fill="#FFF"/>
+        <circle cx="2.2" cy="-8.1" r=".7" fill="#FFE2C6"/></g>
+    </g></g></svg>`;
+}
+
+function carSVG(dir){
+  return `<svg width="52" height="34" viewBox="-9 -9 18 10" xmlns="http://www.w3.org/2000/svg"
+    style="filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))">
+    <ellipse cx="0" cy="0.3" rx="6" ry="1" fill="#000" opacity=".22"/>
+    <g transform="scale(${dir} 1)">
+      <path d="M-7 -2 L-6 -5.4 Q-4.4 -7.6 -.6 -7.6 Q3.2 -7.6 4.6 -5.4 L6.8 -4.6 Q7.6 -4.2 7.6 -2.6 L7.6 -2 Z" fill="#E4572E"/>
+      <path d="M-4.2 -5.2 Q-3.2 -6.6 -.8 -6.6 L-.8 -4.4 L-4.6 -4.4 Z" fill="#CFE6F0"/>
+      <path d="M.4 -6.6 Q2.8 -6.6 3.8 -5.2 L4.4 -4.4 L.4 -4.4 Z" fill="#CFE6F0"/>
+      <circle cx="-4.2" cy="-1.6" r="1.7" fill="#26302F"/><circle cx="4.2" cy="-1.6" r="1.7" fill="#26302F"/>
+    </g></svg>`;
+}
+
+function meContent(dir){
+  return (mode.id === "walk") ? girlSVG(dir, true) : carSVG(dir);
+}
+
+
+/* ── 지도 위를 걸어가는 사람 ── */
+const AV = { skin:"#FFE2C6", hair:"#4A322C", top:"#FFFFFF", collar:"#3E8E86",
+             ribbon:"#E8563F", skirt:"#2A5A6E", shoe:"#6B4A38", bag:"#C98F4B", eye:"#2A1F1C" };
+
+function girlSVG(fast){
+  const dur = fast ? "0.5s" : "0.85s", A = fast ? 32 : 22;
+  const sw = (a,b,cx,cy) => `<animateTransform attributeName="transform" type="rotate"
+    values="${a} ${cx} ${cy};${b} ${cx} ${cy};${a} ${cx} ${cy}" dur="${dur}" repeatCount="indefinite"/>`;
+  return `<svg viewBox="-12 -24 24 26" xmlns="http://www.w3.org/2000/svg">
+  <ellipse cy="0.6" rx="4.4" ry="1.1" fill="#000" opacity=".28"/>
+  <g><animateTransform attributeName="transform" type="translate"
+      values="0 0;0 -0.5;0 0;0 -0.5;0 0" dur="${dur}" repeatCount="indefinite"/>
+    <rect x="1.5" y="-9.4" width="2.7" height="2.6" rx=".7" fill="${AV.bag}"/>
+    <g>${sw(A,-A,-2.2,-12.4)}<rect x="-2.75" y="-12.5" width="1.1" height="4.3" rx=".55" fill="#E2E2E2"/>
+      <circle cx="-2.2" cy="-8.1" r=".7" fill="#F2CDAF"/></g>
+    <g>${sw(-A-2,A+2,-0.7,-5.4)}<rect x="-1.45" y="-5.5" width="1.5" height="4.7" rx=".75" fill="#F2CDAF"/>
+      <rect x="-1.8" y="-1.2" width="2.1" height="1.2" rx=".6" fill="#553826"/></g>
+    <g>${sw(A+2,-A-2,0.7,-5.4)}<rect x="-.05" y="-5.5" width="1.5" height="4.7" rx=".75" fill="${AV.skin}"/>
+      <rect x="-.3" y="-1.2" width="2.1" height="1.2" rx=".6" fill="${AV.shoe}"/></g>
+    <g>${sw(3,-3,0,-8.6)}<path d="M-2.4 -8.7 L2.4 -8.7 L3.5 -4.7 L-3.5 -4.7 Z" fill="${AV.skirt}"/></g>
+    <path d="M-2.3 -12.9 L2.3 -12.9 L2.5 -8.4 L-2.5 -8.4 Z" fill="${AV.top}"/>
+    <path d="M-2.1 -12.9 L0 -10.3 L2.1 -12.9 L1.1 -13.1 L0 -11.7 L-1.1 -13.1 Z" fill="${AV.collar}"/>
+    <path d="M-1 -10.6 L0 -10.1 L1 -10.6 L.4 -9.6 L-.4 -9.6 Z" fill="${AV.ribbon}"/>
+    <rect x="-.55" y="-13.4" width="1.1" height="1.1" fill="#F2CDAF"/>
+    <ellipse cx="0" cy="-15.7" rx="3.2" ry="3.4" fill="${AV.hair}"/>
+    <rect x="-3.5" y="-16.3" width="1.4" height="4.8" rx=".7" fill="${AV.hair}"/>
+    <rect x="2.1" y="-16.3" width="1.4" height="4.8" rx=".7" fill="${AV.hair}"/>
+    <circle cx="0" cy="-15.2" r="2.5" fill="${AV.skin}"/>
+    <path d="M-2.8 -16.1 Q0 -19.4 2.8 -16.1 Q1.4 -17.5 0 -17.2 Q-1.4 -17.5 -2.8 -16.1 Z" fill="${AV.hair}"/>
+    <ellipse cx="-1.5" cy="-14.5" rx=".6" ry=".4" fill="#FF9E8A" opacity=".6"/>
+    <ellipse cx="1.5" cy="-14.5" rx=".6" ry=".4" fill="#FF9E8A" opacity=".6"/>
+    <circle cx="-.85" cy="-15.1" r=".33" fill="${AV.eye}"/>
+    <circle cx=".85" cy="-15.1" r=".33" fill="${AV.eye}"/>
+    <path d="M-.5 -14.1 Q0 -13.7 .5 -14.1" stroke="${AV.eye}" stroke-width=".22" fill="none" stroke-linecap="round"/>
+    <g>${sw(-A,A,2.2,-12.4)}<rect x="1.65" y="-12.5" width="1.1" height="4.3" rx=".55" fill="${AV.top}"/>
+      <circle cx="2.2" cy="-8.1" r=".7" fill="${AV.skin}"/></g>
+  </g></svg>`;
+}
+
+function carSVG(){
+  return `<svg viewBox="-12 -14 24 16" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cy="0.6" rx="7" ry="1.4" fill="#000" opacity=".28"/>
+    <g><animateTransform attributeName="transform" type="translate" values="0 0;0 -.3;0 0" dur=".5s" repeatCount="indefinite"/>
+    <path d="M-7 -2 L-6 -5.4 Q-4.4 -7.6 -.6 -7.6 Q3.2 -7.6 4.6 -5.4 L6.8 -4.6 Q7.6 -4.2 7.6 -2.6 L7.6 -2 Z" fill="#E4572E"/>
+    <path d="M-4.2 -5.2 Q-3.2 -6.6 -.8 -6.6 L-.8 -4.4 L-4.6 -4.4 Z" fill="#CFE6F0"/>
+    <path d="M.4 -6.6 Q2.8 -6.6 3.8 -5.2 L4.4 -4.4 L.4 -4.4 Z" fill="#CFE6F0"/>
+    <circle cx="-4.2" cy="-1.6" r="1.7" fill="#26302F"/><circle cx="4.2" cy="-1.6" r="1.7" fill="#26302F"/></g></svg>`;
+}
+
+function planeSVG(){
+  return `<svg viewBox="-12 -12 24 24" xmlns="http://www.w3.org/2000/svg">
+    <g><animateTransform attributeName="transform" type="translate" values="0 0;0 -.6;0 0" dur="2.4s" repeatCount="indefinite"/>
+    <path d="M0 -9 L1.8 -2 L9 1.4 L9 3 L1.8 1.6 L1.4 6 L4 7.6 L4 8.8 L0 7.8 L-4 8.8 L-4 7.6 L-1.4 6 L-1.8 1.6 L-9 3 L-9 1.4 L-1.8 -2 Z"
+      fill="#E9EEE9" stroke="#0C1719" stroke-width=".6" stroke-linejoin="round"/></g></svg>`;
+}
+
+function setAvatar(){
+  const el = $("#avatar");
+  const on = (viewMode === "map");
+  el.style.display = on ? "block" : "none";
+  if (!on) return;
+  const art = mode.id === "walk" ? girlSVG(false) : mode.id === "plane" ? planeSVG() : carSVG();
+  el.innerHTML = art + (NAME ? `<b>${esc(NAME)}</b>` : "");
+}
+
+function faceAvatar(pan){
+  const g = $("#avatar").querySelector("svg");
+  if (!g) return;
+  if (mode.id === "plane") g.style.transform = `rotate(${(pan || 0).toFixed(0)}deg)`;
+  else g.style.transform = (pan > 180 ? "scaleX(-1)" : "scaleX(1)");
+}
+
+/* ── 네이버 거리뷰 ── */
+let pano = null, panoAt = -1e9;
+const hasNaver = () => !!(NAVER_KEY && window.naver && naver.maps && naver.maps.Panorama);
+
+function buildRoad(){
+  if (pano || !hasNaver()) return;
+  pano = new naver.maps.Panorama($("#road"), {
+    position: new naver.maps.LatLng(from.lat, from.lng),
+    pov: { pan: 0, tilt: 0, fov: 100 },
+    aroundControl: false, zoomControl: false, flightSpot: false,
+  });
+}
+
+function roadStep(p){
+  if (!pano) return;
+  if (travelled - panoAt < 35) return;      // 35m 마다 한 걸음
+  panoAt = travelled;
+  try {
+    pano.setPosition(new naver.maps.LatLng(p.lat, p.lng));
+    pano.setPov({ pan: p.pan || 0, tilt: 0, fov: 100 });
+  } catch(e){}
 }
 
 /* 위성 화면은 매 프레임 위치를 따라갑니다 */
@@ -1213,14 +1405,31 @@ function satZoom(){
   return Math.max(3, Math.min(18, base + satAdj));
 }
 function satFrame(){
-  if (!satMap || $("#sat").style.display !== "block"){ satRaf = null; return; }
+  if ($("#sat").style.display !== "block"){ satRaf = null; return; }
   let d = travelled;
   if (startTs && Date.now() >= pausedUntil){
     const el = (Date.now() - startTs) / 1000 * rate;
     d = Math.min(totalM, (mode.kmh * 1000 / 3600) * el);
   }
   const q = at(d);
-  satMap.setView([q.lat, q.lng], satZoom(), { animate:false });
+  if (satKakao && !isPlane()){
+    satKakao.setLevel(satLevel());
+    const c = new kakao.maps.LatLng(q.lat, q.lng);
+    satKakao.setCenter(c);
+    if (meOverlay){
+      meOverlay.setPosition(c);
+      const nd = (q.pan > 180) ? -1 : 1;              // 서쪽으로 가면 뒤집는다
+      if (nd !== meDir){ meDir = nd; meOverlay.setContent(meContent(nd)); }
+    }
+  } else if (satMap){
+    const want = "map";
+    if (satTiles && satTileNow !== want){
+      Object.keys(satTiles).forEach(k => { if (satMap.hasLayer(satTiles[k])) satMap.removeLayer(satTiles[k]); });
+      satTiles[want].addTo(satMap);
+      satTileNow = want;
+    }
+    satMap.setView([q.lat, q.lng], satZoom(), { animate:false });
+  }
   satRaf = requestAnimationFrame(satFrame);
 }
 
@@ -1558,19 +1767,29 @@ function sceneFrame(){
 }
 
 function applyView(){
+  if (viewMode === "sat" || (viewMode === "road" && (!hasNaver() || isPlane()))) viewMode = "map";
   sceneOn = (viewMode === "draw");
-  const satOn = (viewMode === "sat");
+  const satOn = (viewMode === "map");
+  const roadOn = (viewMode === "road");
+  $("#road").style.display = roadOn ? "block" : "none";
+  if (roadOn){ buildRoad(); panoAt = -1e9; }
+  setAvatar();
   $("#scene").style.display = sceneOn ? "block" : "none";
   $("#sat").style.display   = satOn ? "block" : "none";
-  $("#satcap").style.display = satOn ? "block" : "none";
   $("#satzoom").style.display = satOn ? "flex" : "none";
-  $("#rv").style.display    = (sceneOn || satOn) ? "none" : "block";
-  $("#look").style.display  = (sceneOn || satOn) ? "none" : "";
   $("#wing").style.display  = (isPlane() && (sceneOn || satOn)) ? "block" : "none";
-  $("#swap").textContent    = isPlane() ? (sceneOn ? "위성" : "그림") : (sceneOn ? "실사" : "그림");
+  $("#swap").textContent = viewMode === "map" ? ((hasNaver() && !isPlane()) ? "거리뷰" : "그림")
+    : viewMode === "road" ? "그림" : "지도";
   if (satOn){
     buildSat();
-    setTimeout(() => { satMap.invalidateSize(); if (!satRaf) satRaf = requestAnimationFrame(satFrame); }, 60);
+    setTimeout(() => {
+      if (satMap) satMap.invalidateSize();
+      if (satKakao){
+        satKakao.setMapTypeId(kakao.maps.MapTypeId.ROADMAP);
+        satKakao.relayout();
+      }
+      if (!satRaf) satRaf = requestAnimationFrame(satFrame);
+    }, 80);
   }
   if (sceneOn){ buildScene(curTheme || "hill"); if (!rafId) rafId = requestAnimationFrame(sceneFrame); }
 }
@@ -1611,20 +1830,13 @@ function jumpInner(m){
   const p = at(m);
   const pos = new kakao.maps.LatLng(p.lat, p.lng);
 
-  if (!sceneOn && !isPlane() && rvc) rvc.getNearestPanoId(pos, 80, (panoId) => {
-    if (panoId && panoId !== lastPano){
-      lastPano = panoId;
-      rv.setPanoId(panoId, pos);
-      setTimeout(() => rv.setViewpoint({ pan:p.pan, tilt:0, zoom:0 }), 120);
-    }
-  });
-
+  if (viewMode === "road") roadStep(p);
+  faceAvatar(p.pan);
   if (isPlane()){
     wdot.setLatLng([p.lat, p.lng]);
     wline.setLatLngs(path.filter((q,i) => cum[i] <= m).map(q => [q.lat, q.lng]).concat([[p.lat, p.lng]]));
   } else {
   miniDot.setPosition(pos);
-  mini.setCenter(pos);
   miniLine.setPath(path.filter((q,i) => cum[i] <= m && i % 4 === 0).map(q => new kakao.maps.LatLng(q.lat, q.lng)).concat([pos]));
   }
 
