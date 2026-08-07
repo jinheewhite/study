@@ -324,6 +324,7 @@ const NAVER_KEY = "";
   <div id="bar">
     <div id="meta"><span id="next"></span><span id="left" class="mono"></span></div>
     <div id="ctrl">
+      <button id="msgbtn">문구 켬</button>
       <button id="tune">♪ 켬</button>
       <button id="swap">그림</button>
       <button id="stop"><i></i><span>길게 눌러 중단</span></button>
@@ -353,7 +354,7 @@ const RATES = [{n:"실시간",v:1},{n:"2배",v:2},{n:"3배",v:3},{n:"5배",v:5},
 const STEP_M = 45;          // 로드뷰를 갱신할 거리 간격(m)
 const STOP_SEC = 12;        // 휴게소 정차 시간(초)
 
-let mode = MODES[0], minutes = 25, rate = 1, viewMode = "map", music = true;
+let mode = MODES[0], minutes = 25, rate = 1, viewMode = "map", music = true, quoteOn = true;
 let from = null, to = null;
 let path = [], cum = [], totalM = 0;   // 경로 좌표 / 누적거리 / 총거리
 let pois = [];                          // 경로 위 휴게소·명소
@@ -806,14 +807,20 @@ const EV = {
   common: ["앞차가 깜빡이를 켜고 차선을 바꿉니다", "고속도로 표지판이 스쳐 지나갑니다",
            "화물차 한 대를 앞질렀습니다", "저 멀리 산등성이가 겹쳐 보입니다",
            "전신주가 규칙적으로 지나갑니다"],
+  sky:    ["구름 위를 지나고 있습니다", "창밖이 온통 파랗습니다",
+           "저 아래 구름이 솜처럼 깔려 있습니다", "기내가 조용해졌습니다",
+           "아래로 바다가 끝없이 이어집니다", "저 멀리 해안선이 보입니다",
+           "날개 끝 등이 깜빡입니다", "고도가 조금 낮아졌습니다"],
   plain:  ["논 위로 백로 한 마리가 날아오릅니다", "들판 끝에 비닐하우스가 반짝입니다",
            "벼가 바람에 한 방향으로 눕습니다", "저수지에 하늘이 그대로 비칩니다"],
   hill:   ["과수원 사이로 사다리가 놓여 있습니다", "언덕 위에 홀로 선 나무가 보입니다",
            "밭두렁을 따라 경운기가 지나갑니다", "산자락에 안개가 걸려 있습니다"],
   mountain:["계곡물 소리가 들릴 것 같습니다", "산비탈에 낙석 방지망이 이어집니다",
             "구름이 산허리를 지나갑니다", "굽잇길을 따라 크게 돕니다"],
-  metro:  ["방음벽이 길게 이어집니다", "송전탑이 줄지어 서 있습니다",
-           "나들목 갈림길을 지납니다", "차가 조금 많아졌습니다"],
+  metro:  ["신호에 걸려 잠깐 멈췄습니다", "횡단보도에 사람들이 건너갑니다",
+           "가게 간판들이 줄지어 지나갑니다", "버스 한 대가 정류장에 섭니다",
+           "골목에서 자전거가 나옵니다", "차가 조금 많아졌습니다",
+           "아파트 단지를 끼고 돕니다"],
   coast:  ["수평선 위로 배 한 척이 떠 있습니다", "갈매기가 창밖을 스쳐 갑니다",
            "바다 냄새가 날 것 같습니다", "방파제 등대가 보입니다"],
   jeju:   ["돌담을 따라 유채가 흔들립니다", "오름 하나가 천천히 지나갑니다",
@@ -837,7 +844,12 @@ const EV = {
 };
 
 function pickEvent(){
-  const h = new Date().getHours(), pool = [].concat(EV.common, EV[curTheme] || []);
+  const h = new Date().getHours();
+  if (isPlane()){                      // 하늘에서는 하늘 이야기만
+    const sky = EV.sky.concat(EV.plane || []);
+    return sky[Math.floor(Math.random() * sky.length)];
+  }
+  const pool = [].concat(EV.common, EV[curTheme] || []);
   if (EV[weather.kind]) pool.push.apply(pool, EV[weather.kind]);
   if (h >= 20 || h < 6) pool.push.apply(pool, EV.night);
   if (EV[mode.id]) pool.push.apply(pool, EV[mode.id]);
@@ -1118,6 +1130,7 @@ function pickQuote(){
 function nowKmSafe(){ return travelled; }
 
 function showQuote(){
+  if (!quoteOn) return;
   const q = $("#quote");
   const useMom = MOM.length && Math.random() < 0.55;
   if (useMom){
@@ -1164,7 +1177,7 @@ async function begin(){
 
 async function loadRoute(){
   if (isPlane()){
-    path = greatCircle(from, to, 220);
+    path = flightPath(from, to);
     finishRoute();
     return;
   }
@@ -1257,7 +1270,13 @@ function buildMap(){
     viewMode = ring[(ring.indexOf(viewMode) + 1) % ring.length];
     applyView();
   };
-    $("#tune").onclick = toggleMusic;
+    $("#msgbtn").onclick = () => {
+    quoteOn = !quoteOn;
+    $("#msgbtn").textContent = quoteOn ? "문구 켬" : "문구 끔";
+    if (!quoteOn) $("#quote").classList.remove("on");
+  };
+  $("#msgbtn").textContent = quoteOn ? "문구 켬" : "문구 끔";
+  $("#tune").onclick = toggleMusic;
     $("#tune").textContent = music ? "♪ 켬" : "♪ 끔";
     $("#mini").onclick = () => {
       $("#mini").classList.toggle("big");
@@ -1288,6 +1307,12 @@ function buildMap(){
     $("#mini").classList.toggle("big");
     setTimeout(() => { mini.relayout(); fitMini(); }, 300);
   };
+  $("#msgbtn").onclick = () => {
+    quoteOn = !quoteOn;
+    $("#msgbtn").textContent = quoteOn ? "문구 켬" : "문구 끔";
+    if (!quoteOn) $("#quote").classList.remove("on");
+  };
+  $("#msgbtn").textContent = quoteOn ? "문구 켬" : "문구 끔";
   $("#tune").onclick = toggleMusic;
   $("#tune").textContent = music ? "♪ 켬" : "♪ 끔";
   document.querySelectorAll("#satzoom button").forEach(b => {
@@ -1344,6 +1369,29 @@ function greatCircle(a, b, steps){
     const y = A*Math.cos(la1)*Math.sin(lo1) + B*Math.cos(la2)*Math.sin(lo2);
     const z = A*Math.sin(la1) + B*Math.sin(la2);
     out.push({ lat: Math.atan2(z, Math.hypot(x,y))*R2D, lng: Math.atan2(y,x)*R2D });
+  }
+  return out;
+}
+
+/* 실제 항로 — 북한 영공은 닫혀 있어 서해나 동해로 돌아갑니다 */
+const NK = { laMin:37.7, laMax:43.3, loMin:124.0, loMax:131.0 };
+const inNK = (p) => p.lat > NK.laMin && p.lat < NK.laMax && p.lng > NK.loMin && p.lng < NK.loMax;
+
+function flightPath(a, b){
+  const direct = greatCircle(a, b, 240);
+  if (!direct.some(inNK)) return direct;                 // 안 지나면 그대로
+
+  const head = bearing(a, b);
+  const east = (head < 60 || head > 345);                // 북·북동쪽이면 동해로
+  const via = east
+    ? [{ lat:37.4, lng:131.4 }, { lat:41.8, lng:139.8 }] // 동해 → 일본 북쪽
+    : [{ lat:36.4, lng:124.4 }, { lat:38.2, lng:120.6 }];// 서해 → 산둥 반도 북쪽
+
+  const legs = [a, via[0], via[1], b];
+  let out = [];
+  for (let i = 1; i < legs.length; i++){
+    const seg = greatCircle(legs[i-1], legs[i], i === legs.length - 1 ? 180 : 40);
+    out = out.concat(i === 1 ? seg : seg.slice(1));
   }
   return out;
 }
@@ -1460,37 +1508,87 @@ const AV = { skin:"#FFE2C6", hair:"#4A322C", top:"#FFFFFF", collar:"#3E8E86",
              ribbon:"#E8563F", skirt:"#2A5A6E", shoe:"#6B4A38", bag:"#C98F4B", eye:"#2A1F1C" };
 
 function girlSVG(fast){
-  const dur = fast ? "0.5s" : "0.85s", A = fast ? 32 : 22;
-  const sw = (a,b,cx,cy) => `<animateTransform attributeName="transform" type="rotate"
-    values="${a} ${cx} ${cy};${b} ${cx} ${cy};${a} ${cx} ${cy}" dur="${dur}" repeatCount="indefinite"/>`;
-  return `<svg viewBox="-12 -24 24 26" xmlns="http://www.w3.org/2000/svg">
-  <ellipse cy="0.6" rx="4.4" ry="1.1" fill="#000" opacity=".28"/>
+  const dur = fast ? "0.52s" : "0.86s", A = fast ? 30 : 21;
+  const sw = (x,y,cx,cy) => `<animateTransform attributeName="transform" type="rotate"
+    values="${x} ${cx} ${cy};${y} ${cx} ${cy};${x} ${cx} ${cy}" dur="${dur}" repeatCount="indefinite"/>`;
+  const HAIR = "#3B2B27", HAIR2 = "#503A33", SKIN = "#FFE3C9", SKIN2 = "#F3CBAC";
+  const BAG = "#242832", BAG2 = "#333947";
+  const TOP = "#232E52", TRIM = "#F2F4F8", RIB = "#FFFFFF";      // 남색 반팔 · 흰 배색 · 흰 리본
+  const SKIRT = "#C2C5CC", BAND = "#2B3559", PLEAT = "#9DA2AC";  // 회색 주름치마 · 남색 띠
+  const SOCK = "#FFFFFF", SHOE = "#26262A";
+  return `<svg viewBox="-13 -28 26 30" xmlns="http://www.w3.org/2000/svg">
+  <ellipse cy="0.7" rx="5" ry="1.2" fill="#000" opacity=".26"/>
   <g><animateTransform attributeName="transform" type="translate"
-      values="0 0;0 -0.5;0 0;0 -0.5;0 0" dur="${dur}" repeatCount="indefinite"/>
-    <rect x="1.5" y="-9.4" width="2.7" height="2.6" rx=".7" fill="${AV.bag}"/>
-    <g>${sw(A,-A,-2.2,-12.4)}<rect x="-2.75" y="-12.5" width="1.1" height="4.3" rx=".55" fill="#E2E2E2"/>
-      <circle cx="-2.2" cy="-8.1" r=".7" fill="#F2CDAF"/></g>
-    <g>${sw(-A-2,A+2,-0.7,-5.4)}<rect x="-1.45" y="-5.5" width="1.5" height="4.7" rx=".75" fill="#F2CDAF"/>
-      <rect x="-1.8" y="-1.2" width="2.1" height="1.2" rx=".6" fill="#553826"/></g>
-    <g>${sw(A+2,-A-2,0.7,-5.4)}<rect x="-.05" y="-5.5" width="1.5" height="4.7" rx=".75" fill="${AV.skin}"/>
-      <rect x="-.3" y="-1.2" width="2.1" height="1.2" rx=".6" fill="${AV.shoe}"/></g>
-    <g>${sw(3,-3,0,-8.6)}<path d="M-2.4 -8.7 L2.4 -8.7 L3.5 -4.7 L-3.5 -4.7 Z" fill="${AV.skirt}"/></g>
-    <path d="M-2.3 -12.9 L2.3 -12.9 L2.5 -8.4 L-2.5 -8.4 Z" fill="${AV.top}"/>
-    <path d="M-2.1 -12.9 L0 -10.3 L2.1 -12.9 L1.1 -13.1 L0 -11.7 L-1.1 -13.1 Z" fill="${AV.collar}"/>
-    <path d="M-1 -10.6 L0 -10.1 L1 -10.6 L.4 -9.6 L-.4 -9.6 Z" fill="${AV.ribbon}"/>
-    <rect x="-.55" y="-13.4" width="1.1" height="1.1" fill="#F2CDAF"/>
-    <ellipse cx="0" cy="-15.7" rx="3.2" ry="3.4" fill="${AV.hair}"/>
-    <rect x="-3.5" y="-16.3" width="1.4" height="4.8" rx=".7" fill="${AV.hair}"/>
-    <rect x="2.1" y="-16.3" width="1.4" height="4.8" rx=".7" fill="${AV.hair}"/>
-    <circle cx="0" cy="-15.2" r="2.5" fill="${AV.skin}"/>
-    <path d="M-2.8 -16.1 Q0 -19.4 2.8 -16.1 Q1.4 -17.5 0 -17.2 Q-1.4 -17.5 -2.8 -16.1 Z" fill="${AV.hair}"/>
-    <ellipse cx="-1.5" cy="-14.5" rx=".6" ry=".4" fill="#FF9E8A" opacity=".6"/>
-    <ellipse cx="1.5" cy="-14.5" rx=".6" ry=".4" fill="#FF9E8A" opacity=".6"/>
-    <circle cx="-.85" cy="-15.1" r=".33" fill="${AV.eye}"/>
-    <circle cx=".85" cy="-15.1" r=".33" fill="${AV.eye}"/>
-    <path d="M-.5 -14.1 Q0 -13.7 .5 -14.1" stroke="${AV.eye}" stroke-width=".22" fill="none" stroke-linecap="round"/>
-    <g>${sw(-A,A,2.2,-12.4)}<rect x="1.65" y="-12.5" width="1.1" height="4.3" rx=".55" fill="${AV.top}"/>
-      <circle cx="2.2" cy="-8.1" r=".7" fill="${AV.skin}"/></g>
+      values="0 0;0 -0.55;0 0;0 -0.55;0 0" dur="${dur}" repeatCount="indefinite"/>
+
+    <!-- 검정 백팩 -->
+    <rect x="-3.5" y="-13.8" width="7" height="6" rx="1.6" fill="${BAG}"/>
+    <rect x="-3.5" y="-13.8" width="7" height="2" rx="1.3" fill="${BAG2}"/>
+    <rect x="-1" y="-11.9" width="2" height="1.2" rx="0.5" fill="#8E97A6"/>
+
+    <!-- 뒤쪽 팔 -->
+    <g>${sw(A,-A,-2.6,-12.6)}
+      <rect x="-3.15" y="-12.7" width="1.35" height="2.4" rx=".6" fill="#1B2444"/>
+      <rect x="-3.15" y="-10.5" width="1.35" height=".5" fill="${TRIM}" opacity=".9"/>
+      <rect x="-3.0" y="-10.1" width="1.05" height="1.7" rx=".5" fill="${SKIN2}"/>
+      <circle cx="-2.5" cy="-8.4" r=".85" fill="${SKIN2}"/></g>
+
+    <!-- 다리 -->
+    <g>${sw(-A-3,A+3,-1.1,-5.9)}
+      <rect x="-2.05" y="-6" width="1.75" height="5" rx=".85" fill="${SKIN2}"/>
+      <rect x="-2.05" y="-2.5" width="1.75" height="1.3" rx=".4" fill="#E8E8E8"/>
+      <rect x="-2.5" y="-1.4" width="2.7" height="1.05" rx=".5" fill="#1E1E22"/>
+      <rect x="-2.5" y="-.5" width="2.7" height=".55" rx=".26" fill="#F0F0F0"/></g>
+    <g>${sw(A+3,-A-3,1.1,-5.9)}
+      <rect x="0.3" y="-6" width="1.75" height="5" rx=".85" fill="${SKIN}"/>
+      <rect x="0.3" y="-2.5" width="1.75" height="1.3" rx=".4" fill="${SOCK}"/>
+      <rect x="-.2" y="-1.4" width="2.7" height="1.05" rx=".5" fill="${SHOE}"/>
+      <rect x="-.2" y="-.5" width="2.7" height=".55" rx=".26" fill="#F5F5F5"/></g>
+
+    <!-- 치마 -->
+    <g>${sw(3.5,-3.5,0,-9.4)}
+      <path d="M-2.8 -9.5 L2.8 -9.5 L4.2 -5.4 L-4.2 -5.4 Z" fill="${SKIRT}"/>
+      <path d="M-3.62 -7.0 L3.62 -7.0 L3.9 -6.2 L-3.9 -6.2 Z" fill="${BAND}"/>
+      <path d="M-1.4 -9.5 L-2.1 -5.4 M0 -9.5 L0 -5.4 M1.4 -9.5 L2.1 -5.4 M-2.6 -9.5 L-3.4 -5.4 M2.6 -9.5 L3.4 -5.4"
+            stroke="${PLEAT}" stroke-width=".26" opacity=".85"/></g>
+
+    <!-- 상의 -->
+    <path d="M-2.7 -13.6 L2.7 -13.6 L2.9 -9.2 L-2.9 -9.2 Z" fill="${TOP}"/>
+    <path d="M-2.5 -13.7 L0 -11.2 L2.5 -13.7 L1.5 -13.9 L0 -12.5 L-1.5 -13.9 Z" fill="${TRIM}"/>
+    <rect x="-2.9" y="-9.9" width="5.8" height=".45" fill="${TRIM}" opacity=".85"/>
+    <circle cx="1.75" cy="-11.6" r=".42" fill="#E8C15A"/>
+    <path d="M-1.25 -11.5 L0 -10.9 L1.25 -11.5 L.5 -10.1 L-.5 -10.1 Z" fill="${RIB}"/>
+    <circle cx="0" cy="-11" r=".32" fill="#DDE2EA"/>
+
+    <!-- 어깨끈 -->
+    <rect x="-2.15" y="-13.6" width=".7" height="4.3" rx=".35" fill="${BAG}"/>
+    <rect x="1.45" y="-13.6" width=".7" height="4.3" rx=".35" fill="${BAG}"/>
+
+    <!-- 목 -->
+    <rect x="-.7" y="-14.4" width="1.4" height="1.2" fill="${SKIN2}"/>
+
+    <!-- 머리 -->
+    <ellipse cx="0" cy="-18.4" rx="5.1" ry="4.9" fill="${HAIR}"/>
+    <rect x="-5.3" y="-19" width="2" height="6.2" rx="1" fill="${HAIR}"/>
+    <rect x="3.3" y="-19" width="2" height="6.2" rx="1" fill="${HAIR}"/>
+    <circle cx="0" cy="-17.6" r="4.2" fill="${SKIN}"/>
+    <path d="M-4.3 -18.6 Q-3.4 -23.2 0 -23.2 Q3.4 -23.2 4.3 -18.6
+             Q3 -20.4 1.4 -20 Q0 -21.2 -1.6 -20.2 Q-3.2 -20.6 -4.3 -18.6 Z" fill="${HAIR}"/>
+    <path d="M-2.4 -21.9 Q0 -23 2.4 -21.9" stroke="${HAIR2}" stroke-width=".5" fill="none" opacity=".8"/>
+    <ellipse cx="-2.5" cy="-16.4" rx="1" ry=".6" fill="#FF9E8A" opacity=".55"/>
+    <ellipse cx="2.5" cy="-16.4" rx="1" ry=".6" fill="#FF9E8A" opacity=".55"/>
+    <ellipse cx="-1.5" cy="-17.5" rx=".78" ry=".95" fill="#2A2018"/>
+    <ellipse cx="1.5" cy="-17.5" rx=".78" ry=".95" fill="#2A2018"/>
+    <circle cx="-1.24" cy="-17.9" r=".3" fill="#FFFFFF"/>
+    <circle cx="1.76" cy="-17.9" r=".3" fill="#FFFFFF"/>
+    <path d="M-.7 -15.9 Q0 -15.2 .7 -15.9" stroke="#3A2A22" stroke-width=".3" fill="none" stroke-linecap="round"/>
+
+    <!-- 앞쪽 팔 -->
+    <g>${sw(-A,A,2.6,-12.6)}
+      <rect x="1.8" y="-12.7" width="1.35" height="2.4" rx=".6" fill="${TOP}"/>
+      <rect x="1.8" y="-10.5" width="1.35" height=".5" fill="${TRIM}"/>
+      <rect x="1.95" y="-10.1" width="1.05" height="1.7" rx=".5" fill="${SKIN}"/>
+      <circle cx="2.5" cy="-8.4" r=".85" fill="${SKIN}"/></g>
   </g></svg>`;
 }
 
@@ -1622,8 +1720,9 @@ const THEMES = {
 const SEA  = ["속초","고성","양양","강릉","동해","삼척","울진","영덕","포항","경주","울산","기장","해운대","목포","여수","완도","해남","보령","태안","서산","당진","군산","부안","통영","거제","남해","사천"];
 const HIGH = ["무주","진안","장수","정선","평창","횡성","홍천","인제","양구","화천","태백","영월","단양","제천","봉화","영양","청송","산청","함양","거창","하동"];
 
-function themeOf(sido, sigun){
-  const g = sigun || "";
+function themeOf(sido, sigun, dong){
+  const g = sigun || "", d = dong || "";
+  if (/동$/.test(d) && !/면$|리$/.test(d)) return "metro";   // 시내 한복판
   if (/제주/.test(sido)) return "jeju";
   if (SEA.some(k => g.indexOf(k) === 0)) return "coast";
   if (HIGH.some(k => g.indexOf(k) === 0)) return "mountain";
@@ -2021,7 +2120,7 @@ function jumpInner(m){
         saveStamp(sigun);
         if (seenSigun.indexOf(sigun) < 0) seenSigun.push(sigun);
         fetchWeather(p.lat, p.lng);
-        const th = themeOf(sido, sigun);
+        const th = themeOf(sido, sigun, dong);
         banner(sigun + " 진입", THEMES[th].note);
         if (isPlane()){ /* 하늘은 하나 */ } else if (sceneOn) buildScene(th); else curTheme = th;
       }
