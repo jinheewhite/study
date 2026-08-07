@@ -66,6 +66,13 @@ const NAVER_KEY = "";
   #ratelist button[aria-pressed="true"] .sp{color:var(--dawn)}
   #ratelist .de{flex:1;font-size:12.5px;line-height:1.6}
   #ratelist .de b{color:#DCE8E5;font-weight:600}
+  #more{margin-top:20px;border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:14px 16px;text-align:left}
+  #more summary{cursor:pointer;list-style:none;font-size:13px;color:var(--mint)}
+  #more summary::-webkit-details-marker{display:none}
+  #more summary:before{content:"⚙  "}
+  #more label{display:block;margin:16px 0 8px;font-size:11px;letter-spacing:.2em;color:var(--dim)}
+  #fromBtn{height:42px;padding:0 16px;border-radius:10px;border:1px solid var(--line);
+    background:none;color:var(--dim);font-size:13px;font-family:inherit}
   #more{margin-top:22px;border-top:1px solid var(--line);padding-top:6px}
   #more summary{cursor:pointer;list-style:none;font-size:13px;color:var(--mint);padding:12px 0}
   #more summary::-webkit-details-marker{display:none}
@@ -100,16 +107,16 @@ const NAVER_KEY = "";
     background:var(--panel);color:#8FA9A4}
   #nav #next{background:var(--dawn);color:var(--ink);border:0;font-weight:700}
   #nav #next:disabled{opacity:.3}
-  #tripBtn{width:100%;height:54px;margin-top:10px;border-radius:12px;border:1px solid var(--dawn);
+  #tripBtn{width:100%;height:54px;margin-top:12px;border-radius:12px;border:1px solid var(--dawn);
     background:#241C15;color:var(--dawn);font-size:16px;font-family:inherit}
   #tripList{display:none;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
   #tripList button{height:56px;border-radius:12px;border:1px solid var(--line);background:var(--panel);
     color:var(--paper);font-size:14px;font-family:inherit;line-height:1.4}
   #tripList button small{display:block;font-size:11px;color:var(--dim);margin-top:3px}
-  #around{width:100%;height:52px;margin-bottom:14px;border-radius:12px;border:1px solid var(--line);
+  #around{width:100%;height:52px;margin-top:16px;border-radius:12px;border:1px solid var(--line);
     background:var(--panel);color:var(--mint);font-size:15px;font-family:inherit}
   #around:disabled{opacity:.5}
-  #here{width:100%;height:54px;margin-bottom:4px;border-radius:12px;border:1px solid var(--mint);
+  #here{width:100%;height:54px;margin:10px 0 4px;border-radius:12px;border:1px solid var(--mint);
     background:#0F2320;color:var(--mint);font-size:16px;font-family:inherit}
   #here:disabled{opacity:.5}
   .note{font-size:12px;color:var(--dim);line-height:1.7;margin-top:16px}
@@ -274,60 +281,45 @@ const NAVER_KEY = "";
   <div id="dots"></div>
 
   <section class="step" data-step="1">
-    <h1 id="q1">오늘 우리<br>집중해서 달려볼까?</h1>
-    <p class="tiny">출발은 여기에서 할까?</p>
-    <button id="here">📍  응, 지금 있는 곳에서</button>
-    <button id="tripBtn">✈  아니, 오늘은 멀리 떠날래</button>
+    <h1 id="q1">오늘 어디 가고 싶어?</h1>
+    <p class="tiny">가고 싶은 곳을 쓰거나 아래에서 골라줘</p>
+    <input id="qTo" placeholder="예: 서울역 · 부산 해운대 · 파리" autocomplete="off">
+    <div class="sug" id="sTo"></div>
+    <button id="tripBtn">✈  유명한 곳에서 골라볼래</button>
     <div id="tripList"></div>
-    <p class="tiny" style="margin:14px 0 10px">다른 곳에서 출발하려면 아래에서 찾아봐</p>
-    <input id="qFrom" placeholder="예: 전주시청, 서신동" autocomplete="off">
-    <div class="sug" id="sFrom"></div>
+    <p class="tiny" style="margin-top:20px">출발은 <b id="fromNow">지금 있는 곳</b>에서</p>
+    <button id="fromBtn">출발지 바꾸기</button>
+    <div id="fromWrap" style="display:none">
+      <button id="here">📍  지금 있는 곳에서</button>
+      <input id="qFrom" placeholder="다른 곳에서 출발하려면 검색" autocomplete="off">
+      <div class="sug" id="sFrom"></div>
+    </div>
   </section>
 
   <section class="step" data-step="2">
-    <h1>무엇을 타고 갈까?</h1>
-    <p class="tiny">멀거나 해외면 비행기로 알아서 바뀌어</p>
-    <div class="chips" id="modes"></div>
-  </section>
-
-  <section class="step" data-step="3">
-    <h1>어디로 갈거니?</h1>
-    <p class="tiny">가고 싶은 곳을 찾아서 눌러줘</p>
-    <button id="around">🗺  여기 있는 곳을 둘러볼래</button>
-    <input id="qTo" placeholder="예: 서울역 · 비행기면 도쿄, 파리" autocomplete="off">
-    <div class="sug" id="sTo"></div>
-  </section>
-
-  <section class="step" data-step="4">
     <h1>집중 시간은?</h1>
     <p class="tiny">그동안 폰은 내려놓는 거야</p>
     <div class="chips" id="times"></div>
   </section>
 
-  <section class="step" data-step="5">
-    <h1>지도로 볼까,<br>그림으로 볼까?</h1>
-    <p class="tiny">가는 동안 보게 될 화면이야</p>
-    <div class="chips" id="views"></div>
-  </section>
-
-  <section class="step" data-step="6">
-    <h1>음악은 틀어줄까?</h1>
-    <p class="tiny">조용한 피아노가 흐를 거야</p>
-    <div class="chips" id="musics"></div>
-  </section>
-
-  <section class="step" data-step="7">
-    <h1>얼마나 빨리 갈까?</h1>
-    <p class="tiny">앉아 있어야 하는 시간이 달라져</p>
-    <div id="ratelist"></div>
-  </section>
-
-  <section class="step" data-step="8">
+  <section class="step" data-step="3">
     <h1 id="q6">우리 출발할까?</h1>
     <p class="tiny">지금부터 <b id="mm">25</b>분, 폰은 내려놓자</p>
     <div id="plan"></div>
     <button class="go" id="start" disabled>출발</button>
     <p class="note" id="hint"></p>
+    <details id="more">
+      <summary>직접 고르고 싶으면</summary>
+      <label>무엇을 타고</label>
+      <div class="chips" id="modes"></div>
+      <button id="around">🗺  그냥 그곳을 둘러볼래</button>
+      <label>화면</label>
+      <div class="chips" id="views"></div>
+      <label>배경 음악</label>
+      <div class="chips" id="musics"></div>
+      <label>속도</label>
+      <div id="ratelist"></div>
+    </details>
     <div id="stamps"></div>
     <button id="switch">이름 바꾸기</button>
   </section>
@@ -472,14 +464,13 @@ function init(){
   $("#here").onclick = useHere;
 
   /* ── 한 걸음씩 ── */
-  const STEPS = 8;
+  const STEPS = 3;
   let step = 1;
   const dots = $("#dots");
   for (let i = 0; i < STEPS; i++) dots.appendChild(document.createElement("i"));
 
   function canGo(n){
-    if (n === 1) return !!from;
-    if (n === 3) return !!to;
+    if (n === 1) return !!to;
     return true;
   }
   function showStep(n){
@@ -491,7 +482,7 @@ function init(){
     $("#next").style.display = step === STEPS ? "none" : "";
     $("#warn").textContent = "";
     $("#setup").classList.toggle("mid", step < STEPS);
-    if (step >= 7) refresh();
+    if (step >= 2) refresh();
     if (step === STEPS){
       const mm = $("#mm"); if (mm) mm.textContent = minutes;
     }
@@ -522,7 +513,7 @@ function init(){
   $("#next").onclick = async () => {
     if (canGo(step)){ showStep(step + 1); return; }
 
-    const which = (step === 1) ? "from" : "to";
+    const which = "to";
     $("#warn").textContent = "찾아보는 중…";
     const hit = await resolve(which);
     if (hit){
@@ -539,7 +530,7 @@ function init(){
   };
 
   /* 고르면 저절로 다음으로 */
-  ["#modes", "#times", "#views", "#musics"].forEach(sel => {
+  ["#times"].forEach(sel => {
     $(sel).addEventListener("click", (e) => {
       if (e.target.tagName === "BUTTON") setTimeout(() => showStep(step + 1), 260);
     });
@@ -552,21 +543,22 @@ function init(){
     b.onclick = async () => {
       tl.querySelectorAll("button").forEach(x => x.disabled = true);
       b.innerHTML = `${t.n}<small>가는 중…</small>`;
-      from = { name: t.n, lat: t.lat, lng: t.lng };
-      $("#qFrom").value = t.n;
-      $("#sFrom").innerHTML = "";
-      const spot = await pickSpotNear(from);
+      to = { name: t.n, lat: t.lat, lng: t.lng };
+      $("#qTo").value = t.n;
+      $("#sTo").innerHTML = "";
       tl.querySelectorAll("button").forEach(x => x.disabled = false);
       b.innerHTML = `${t.n}<small>${t.s}</small>`;
-      if (!spot){ $("#warn").textContent = "그곳 정보를 못 찾았어 · 다른 곳으로 가볼까"; return; }
-      to = spot;
-      $("#qTo").value = spot.name;
-      mode = MODES.find(m => m.id === "walk");
       await check();
-      if (window.showStep) window.showStep(4);
+      if (window.showStep) window.showStep(2);
     };
     tl.appendChild(b);
   });
+  $("#fromBtn").onclick = () => {
+    const w = $("#fromWrap");
+    const open = w.style.display === "block";
+    w.style.display = open ? "none" : "block";
+    $("#fromBtn").textContent = open ? "출발지 바꾸기" : "닫기";
+  };
   $("#tripBtn").onclick = () => {
     const open = tl.style.display === "grid";
     tl.style.display = open ? "none" : "grid";
@@ -575,17 +567,18 @@ function init(){
 
   $("#around").onclick = async () => {
     const b = $("#around");
-    if (!from){ $("#warn").textContent = "먼저 출발할 곳을 정해줘"; return; }
+    if (!to){ $("#warn").textContent = "먼저 갈 곳을 정해줘"; return; }
     b.disabled = true; b.textContent = "둘러볼 곳을 찾는 중…";
-    const spot = await pickSpotNear(from);
-    b.disabled = false; b.textContent = "🗺  여기 있는 곳을 둘러볼래";
-    if (!spot){ $("#warn").textContent = "둘러볼 곳을 못 찾았어 · 다른 곳에서 해보자"; return; }
-    to = spot;
+    const here = { name: to.name, lat: to.lat, lng: to.lng };
+    const spot = await pickSpotNear(here);
+    b.disabled = false; b.textContent = "🗺  아니, 그냥 그곳을 둘러볼래";
+    if (!spot){ $("#warn").textContent = "둘러볼 곳을 못 찾았어 · 다른 곳으로 해보자"; return; }
+    from = here; to = spot;
+    $("#qFrom").value = here.name;
     $("#qTo").value = spot.name;
-    $("#sTo").innerHTML = "";
     mode = MODES.find(m => m.id === "walk");
     await check();
-    if (window.showStep) window.showStep(4);
+    if (window.showStep) window.showStep(2);
   };
 
   $("#tourMore").onclick = async () => {
@@ -605,7 +598,7 @@ function init(){
     $("#qTo").value = to.name;
     b.textContent = "이 도시 더 둘러보기";
     await check();
-    if (window.showStep) window.showStep(4);
+    if (window.showStep) window.showStep(2);
   };
 
   $("#start").onclick = begin;
@@ -687,6 +680,7 @@ async function check(){
     return;
   }
   autoMode();
+  const fn = $("#fromNow"); if (fn && from) fn.textContent = from.name;
   $("#hint").textContent = `${from.name} → ${to.name}`;
   if (window.refreshNav) window.refreshNav();
   $("#plan").style.display = "block";
@@ -734,7 +728,7 @@ function renderRates(){
       도착까지 <b>${hhmm(real)}</b> · 집중 <b>${runs}번</b></span>`;
     b.onclick = () => {
       rate = r.v; rateTouched = true; renderRates(); refresh();
-      if (window.showStep) setTimeout(() => window.showStep(8), 260);
+
     };
     box.appendChild(b);
   });
@@ -1330,7 +1324,7 @@ function applyName(n){
   $("#setup").style.display = "flex";
   $("#brand").textContent = NAME + "의 프로젝트";
   if (window.showStep) window.showStep(1);
-  const q1 = $("#q1"); if (q1) q1.innerHTML = voc(NAME) + ",<br>오늘 우리<br>집중해서 달려볼까?";
+  const q1 = $("#q1"); if (q1) q1.innerHTML = voc(NAME) + ",<br>오늘 어디 가고 싶어?";
   document.title = NAME + "의 프로젝트";
   renderStamps();
 }
