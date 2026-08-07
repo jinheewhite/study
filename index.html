@@ -2104,7 +2104,16 @@ function buildMap(){
     if (order.length && order[0].lat) rebuildTour(order, tourKmh);
     mode = MODES.find(m => m.kmh === tourKmh) || MODES.find(m => m.id === "walk");
     if (waitStart){ pausedSec += (Date.now() - waitStart) / 1000 * rate; waitStart = 0; }
+
+    /* 새 코스로 지도를 다시 그린다 */
+    satKakao = null; satLeaf = null; satRoute = null; satDone = null;
+    leafRoute = null; leafDone = null; chevrons = [];
+    $("#sat").innerHTML = "";
+    rv = null; rvc = null; panoAt = -1e9; lastPano = null;
+    $("#road").innerHTML = "";
+    applyView();
     setAvatar();
+    jump(want);
     refresh();
   };
   $("#arriveNo").onclick = () => {
@@ -2164,7 +2173,16 @@ function buildMap(){
     if (order.length && order[0].lat) rebuildTour(order, tourKmh);
     mode = MODES.find(m => m.kmh === tourKmh) || MODES.find(m => m.id === "walk");
     if (waitStart){ pausedSec += (Date.now() - waitStart) / 1000 * rate; waitStart = 0; }
+
+    /* 새 코스로 지도를 다시 그린다 */
+    satKakao = null; satLeaf = null; satRoute = null; satDone = null;
+    leafRoute = null; leafDone = null; chevrons = [];
+    $("#sat").innerHTML = "";
+    rv = null; rvc = null; panoAt = -1e9; lastPano = null;
+    $("#road").innerHTML = "";
+    applyView();
     setAvatar();
+    jump(want);
     refresh();
   };
   $("#arriveNo").onclick = () => {
