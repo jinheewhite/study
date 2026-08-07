@@ -113,6 +113,8 @@ const NAVER_KEY = "";
   #tripList button{height:56px;border-radius:12px;border:1px solid var(--line);background:var(--panel);
     color:var(--paper);font-size:14px;font-family:inherit;line-height:1.4}
   #tripList button small{display:block;font-size:11px;color:var(--dim);margin-top:3px}
+  #flyBtn{width:100%;height:50px;margin-top:10px;border-radius:12px;border:1px solid var(--dawn);
+    background:#241C15;color:var(--dawn);font-size:14px;font-family:inherit}
   #around{width:100%;height:52px;margin-top:16px;border-radius:12px;border:1px solid var(--line);
     background:var(--panel);color:var(--mint);font-size:15px;font-family:inherit}
   #around:disabled{opacity:.5}
@@ -312,7 +314,8 @@ const NAVER_KEY = "";
       <summary>직접 고르고 싶으면</summary>
       <label>무엇을 타고</label>
       <div class="chips" id="modes"></div>
-      <button id="around">🗺  그냥 그곳을 둘러볼래</button>
+      <button id="around">🗺  근처 다른 곳으로 걸어가기</button>
+      <button id="flyBtn">✈  아니, 진짜로 타고 갈래</button>
       <label>화면</label>
       <div class="chips" id="views"></div>
       <label>배경 음악</label>
@@ -439,7 +442,7 @@ function init(){
   ps = new kakao.maps.services.Places();
   geo = new kakao.maps.services.Geocoder();
   bindSearch("#qFrom", "#sFrom", (p)=>{ from = p; check(); }, "from");
-  bindSearch("#qTo",   "#sTo",   (p)=>{ to   = p; check(); }, "to");
+  bindSearch("#qTo",   "#sTo",   (p)=>{ to = p; touring = false; check(); }, "to");
   function useHere(){
     const b = $("#here");
     if (!navigator.geolocation){ b.textContent = "이 기기는 위치를 못 찾습니다"; return; }
@@ -451,6 +454,7 @@ function init(){
           ? (res[0].road_address ? res[0].road_address.address_name : res[0].address.address_name)
           : "지금 있는 곳";
         from = { name: nm, lat: la, lng: lo };
+        homeFrom = { name: nm, lat: la, lng: lo };
         $("#qFrom").value = nm;
         $("#sFrom").innerHTML = "";
         b.disabled = false; b.textContent = "📍  지금 있는 곳에서 출발";
@@ -543,6 +547,7 @@ function init(){
     b.onclick = async () => {
       tl.querySelectorAll("button").forEach(x => x.disabled = true);
       b.innerHTML = `${t.n}<small>가는 중…</small>`;
+      touring = false;
       to = { name: t.n, lat: t.lat, lng: t.lng };
       $("#qTo").value = t.n;
       $("#sTo").innerHTML = "";
@@ -563,6 +568,19 @@ function init(){
     const open = tl.style.display === "grid";
     tl.style.display = open ? "none" : "grid";
     $("#tripBtn").textContent = open ? "✈  아니, 오늘은 멀리 떠날래" : "✈  어디로 갈까?";
+  };
+
+  $("#flyBtn").onclick = async () => {
+    if (!tripCity || !homeFrom){ $("#warn").textContent = "지금은 이미 타고 가는 중이야"; return; }
+    touring = true;                       // 다시 바꾸지 않도록
+    from = { name: homeFrom.name, lat: homeFrom.lat, lng: homeFrom.lng };
+    to = { name: tripCity.name, lat: tripCity.lat, lng: tripCity.lng };
+    $("#qFrom").value = from.name;
+    $("#qTo").value = to.name;
+    const fn = $("#fromNow"); if (fn) fn.textContent = from.name;
+    mode = MODES.find(m => m.id === "car");
+    autoMode();
+    await check();
   };
 
   $("#around").onclick = async () => {
@@ -678,6 +696,24 @@ async function check(){
     $("#plan").style.display = "none";
     if (window.refreshNav) window.refreshNav();
     return;
+  }
+  // 멀거나 해외면 그곳에 도착한 셈 치고 둘러본다
+  if (!touring && from && to && (!inKorea(to) || metres(from, to) / 1000 > 900)){
+    touring = true;
+    tripCity = { name: to.name, lat: to.lat, lng: to.lng };
+    $("#plan").style.display = "block";
+    $("#plan").innerHTML = `${esc(to.name)}에서 둘러볼 곳을 찾는 중…`;
+    const spot = await pickSpotNear(tripCity);
+    if (spot){
+      from = { name: tripCity.name, lat: tripCity.lat, lng: tripCity.lng };
+      to = spot;
+      mode = MODES.find(m => m.id === "walk");
+      $("#qFrom").value = from.name;
+      $("#qTo").value = to.name;
+      const fn0 = $("#fromNow"); if (fn0) fn0.textContent = from.name;
+    } else {
+      touring = false;
+    }
   }
   autoMode();
   const fn = $("#fromNow"); if (fn && from) fn.textContent = from.name;
@@ -1627,7 +1663,7 @@ const inKorea = (p) => p.lat > 33 && p.lat < 38.7 && p.lng > 124.5 && p.lng < 13
 
 /* 거리를 보고 알아서 고른다 — 가까우면 걷기, 멀면 자가용, 아주 멀거나 해외면 비행기 */
 function autoMode(){
-  if (!from || !to) return;
+  if (!from || !to || touring) return;
   const d = metres(from, to) / 1000;
   if (needsBoat(to) && !needsBoat(from)){
     mode = MODES.find(m => m.id === "boat");
@@ -2022,6 +2058,7 @@ function faceAvatar(pan){
 /* ── 네이버 거리뷰 ── */
 let pano = null, panoAt = -1e9;
 let groundM = 0, want = 0, pausedSec = 0, legNow = "", depName = "공항";
+let homeFrom = null, tripCity = null, touring = false;
 const speedKmh = (d) => ((isPlane() || isBoat()) && d < groundM) ? 85 : mode.kmh;
 const flying = () => (isPlane() || isBoat()) && travelled >= groundM;   // 공항·항구를 지났는가
 
