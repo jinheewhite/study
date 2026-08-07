@@ -1488,7 +1488,7 @@ async function whereInWorld(lat, lng){
 
 /* 위성 사진 — 키 없이 쓸 수 있는 Esri 타일 */
 let satMap = null, satKakao = null, satTiles = null, satTileNow = "";
-let satRoute = null, satDone = null, wRoute = null, wDone = null;
+let satRoute = null, satDone = null, wRoute = null, wDone = null, wLastMove = 0;
 
 /* 국내는 카카오 스카이뷰 — 훨씬 선명합니다. 해외는 전 세계 위성 타일. */
 function buildSat(){
@@ -1517,7 +1517,8 @@ function buildSat(){
                               scrollWheelZoom:false, doubleClickZoom:false, keyboard:false,
                               zoomAnimation:false, fadeAnimation:false });
   satTiles = {
-    map: L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom:17 }),
+    map: L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                     { maxZoom:12, minZoom:2, updateWhenIdle:true, keepBuffer:1, crossOrigin:true }),
   };
   satTiles.map.addTo(satMap);
   const wthin = path.filter((_, i) => i % Math.max(1, Math.ceil(path.length / 1200)) === 0);
@@ -1794,8 +1795,8 @@ function roadStep(p){
 let satRaf = null;
 let satAdj = parseInt(get("ride:zoom", "0"), 10) || 0;   // 조절값을 기억한다
 function satZoom(){
-  const base = mode.kmh <= 10 ? 18 : mode.kmh <= 120 ? 16 : 13;
-  return Math.max(3, Math.min(18, base + satAdj));
+  const base = flying() ? 5 : (mode.id === "walk" ? 16 : 13);   // 하늘은 넓게
+  return Math.max(2, Math.min(18, base + satAdj));
 }
 function satFrame(){
   if ($("#sat").style.display !== "block"){ satRaf = null; return; }
@@ -1826,8 +1827,12 @@ function satTick(){
       satTiles.map.addTo(satMap);
       satTileNow = "map";
     }
-    if (wDone) wDone.setLatLngs(done.map(d => [d.lat, d.lng]));
-    satMap.setView([q.lat, q.lng], satZoom(), { animate:false });
+    const now = Date.now();
+    if (now - wLastMove > 250){                 // 초당 4번만 움직인다
+      wLastMove = now;
+      if (wDone) wDone.setLatLngs(done.map(d => [d.lat, d.lng]));
+      satMap.setView([q.lat, q.lng], satZoom(), { animate:false });
+    }
   }
 }
 
