@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="icon" href="data:,">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0C1719">
 <meta name="mobile-web-app-capable" content="yes">
@@ -30,6 +31,7 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
   .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums}
   .wrap{max-width:520px;margin:0 auto;padding:28px 20px 40px}
   h1{font-size:30px;line-height:1.2;margin:10px 0 0;font-weight:600}
+  #ver{color:var(--dim);letter-spacing:0;font-size:10px}
   .eyebrow{font-size:11px;letter-spacing:.35em;text-transform:uppercase;color:var(--mint);margin:0}
   .lead{color:#8FA9A4;font-size:14px;line-height:1.7;margin:14px 0 0}
   label{display:block;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);margin:22px 0 8px}
@@ -300,7 +302,7 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
 </div>
 
 <div class="wrap" id="setup" style="display:none">
-  <p class="eyebrow" id="brand">창밖 여행</p>
+  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v12</span></p>
   <div id="dots"></div>
 
   <section class="step" data-step="1">
@@ -1648,7 +1650,7 @@ function applyName(n){
   loadHome();
   $("#intro").style.display = "none";
   $("#setup").style.display = "flex";
-  $("#brand").textContent = "창밖 여행";
+  $("#brand").innerHTML = '창밖 여행 <span id="ver">v12</span>';
   if (window.showStep) window.showStep(1);
   if (window.renderKinds) window.renderKinds();
   const q1 = $("#q1"); if (q1) q1.innerHTML = voc(NAME) + ",<br>오늘 어디 가고 싶어?";
