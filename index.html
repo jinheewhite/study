@@ -30,6 +30,7 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
   .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums}
   .wrap{max-width:520px;margin:0 auto;padding:28px 20px 40px}
   h1{font-size:30px;line-height:1.2;margin:10px 0 0;font-weight:600}
+  #ver{color:var(--dim);letter-spacing:0;font-size:10px}
   .eyebrow{font-size:11px;letter-spacing:.35em;text-transform:uppercase;color:var(--mint);margin:0}
   .lead{color:#8FA9A4;font-size:14px;line-height:1.7;margin:14px 0 0}
   label{display:block;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);margin:22px 0 8px}
@@ -120,8 +121,6 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
   #scene{position:absolute;inset:0;display:none}
   #sat{position:absolute;inset:0;display:none;background:#0B0E11;z-index:1}
   #road{position:absolute;inset:0;display:none;background:#0B0E11;z-index:1}
-  #sat:after{content:"";position:absolute;inset:0;pointer-events:none;
-    background:radial-gradient(ellipse 44% 64% at 50% 46%, #0000 0 66%, #101418 74%, #0B0E11 100%)}
   #jump{position:absolute;right:14px;bottom:112px;z-index:8;display:none;align-items:center;gap:8px;
     height:52px;padding:0 18px 0 15px;border-radius:26px;border:1px solid #ffffff44;
     background:#0C1719D9;color:#F2EFE6;font-size:15px;font-family:inherit;backdrop-filter:blur(8px);
@@ -198,7 +197,8 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
   #meta{display:flex;justify-content:space-between;font-size:13px;color:#CFE0DC;margin-bottom:12px;
        text-shadow:0 1px 4px #000}
   #ctrl{display:flex;gap:8px}
-  #ctrl #msgbtn,#ctrl #tune,#ctrl #swap{width:52px;padding:0;font-size:17px}
+  #ctrl #msgbtn,#ctrl #tune{width:52px;padding:0;font-size:17px}
+  #ctrl #swap{padding:0 16px;font-size:14px}
   #ctrl button{height:44px;padding:0 12px;border-radius:10px;border:1px solid #ffffff33;background:#00000055;color:#DCE8E5;
        font-size:13px;font-family:inherit;backdrop-filter:blur(6px)}
   #stop{flex:1;position:relative;overflow:hidden}
@@ -326,7 +326,7 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
 </div>
 
 <div class="wrap" id="setup" style="display:none">
-  <p class="eyebrow" id="brand">프로젝트</p>
+  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v22</span></p>
   <div id="dots"></div>
 
   <section class="step" data-step="1">
@@ -522,7 +522,7 @@ function chips(sel, list, get, set){
 }
 chips("#modes", MODES.filter(m => m.id !== "plane" && m.id !== "boat").map(m=>({label:`${m.name} ${m.kmh}km/h`, value:m})),
       ()=>mode, v=>{ mode = v; check(); });
-const VIEWS = [{label:"지도",value:"map"},{label:"거리뷰",value:"road"},{label:"그림 풍경",value:"draw"}];
+const VIEWS = [{label:"지도",value:"map"},{label:"거리뷰",value:"road"}];
 chips("#views", VIEWS, ()=>viewMode, v=>viewMode=v);
 chips("#musics", [{label:"켜기",value:true},{label:"끄기",value:false}], ()=>music, v=>music=v);
 
@@ -1085,7 +1085,7 @@ const hhmm = (sec) => {
 
 let rateTouched = false;
 function suggestRate(){
-  if (rateTouched || !totalM) return;
+  if (rateTouched || !totalM || timer) return;
   const target = minutes * 60 * 3;                 // 세 번쯤 앉으면 도착
   const fit = RATES.filter(r => r.v < 60).find(r => tripSeconds(r.v) <= target);
   rate = fit ? fit.v : 5;                          // 아주 멀면 5배
@@ -1783,7 +1783,7 @@ function applyName(n){
   loadHome();
   $("#intro").style.display = "none";
   $("#setup").style.display = "flex";
-  $("#brand").textContent = NAME + "의 프로젝트";
+  $("#brand").innerHTML = '창밖 여행 <span id="ver">v22</span>';
   if (window.showStep) window.showStep(1);
   if (window.renderKinds) window.renderKinds();
   const q1 = $("#q1"); if (q1) q1.innerHTML = voc(NAME) + ",<br>오늘 어디 가고 싶어?";
@@ -1981,7 +1981,7 @@ async function loadRoute(){
   if (!seg.length) throw new Error("길이 없습니다");
   path = [].concat(...seg);
   finishRoute();
-  if (!spots.length && to) spots.push({ name:to.name, desc:"", img:"", m: totalM });
+  if (!spots.length && to) spots.push({ name:to.name, desc:"", img:"", lat:to.lat, lng:to.lng, m: totalM });
 }
 
 /* 집을 중심으로 한 바퀴 도는 코스 (실제 도로) */
@@ -2197,6 +2197,7 @@ function rebuildTour(order, kmh){
   const newLegs = travelLegs.slice();
   const newSpots = [];
   order.forEach(sp => {
+    if (typeof sp.lat !== "number" || typeof sp.lng !== "number") return;
     const line = greatCircle(cur, { lat:sp.lat, lng:sp.lng }, 24);
     let len = 0;
     for (let i = 1; i < line.length; i++) len += metres(line[i-1], line[i]);
@@ -2206,10 +2207,14 @@ function rebuildTour(order, kmh){
     cur = { lat:sp.lat, lng:sp.lng };
     newSpots.push({ ...sp, seen:false, m: newLegs.reduce((a,l) => a + l.len, 0) });
   });
+  const keepPath = path, keepLegs = legs, keepSpots = spots, keepCum = cum, keepTotal = totalM;
   path = out; legs = newLegs; spots = newSpots;
   cum = [0];
   for (let i = 1; i < path.length; i++) cum.push(cum[i-1] + metres(path[i-1], path[i]));
   totalM = cum[cum.length-1];
+  if (!isFinite(totalM) || totalM <= 0){          // 어딘가 어긋나면 되돌린다
+    path = keepPath; legs = keepLegs; spots = keepSpots; cum = keepCum; totalM = keepTotal;
+  }
 }
 
 /* 도로 경로 한 구간 */
@@ -2335,28 +2340,52 @@ function buildMap(){
     buildWorldMap();
     $("#swap").style.display = "";
     $("#swap").onclick = () => {
-    const ring = roadOK() ? ["map","road","draw"] : ["map","draw"];
+        const ring = roadOK() ? ["map","road"] : ["map"];
     viewMode = ring[(ring.indexOf(viewMode) + 1) % ring.length];
     applyView();
   };
     $("#arriveYes").onclick = () => {
     $("#arrive").style.display = "none";
-    const rest = spots.filter((_,i) => i !== tourFirst);
-    const order = spots[tourFirst] ? [spots[tourFirst], ...rest] : spots.slice();
-    if (order.length && order[0].lat) rebuildTour(order, tourKmh);
+    const ok = spots.filter(sp => typeof sp.lat === "number" && typeof sp.lng === "number");
+    const first = spots[tourFirst];
+    const order = (first && typeof first.lat === "number")
+      ? [first, ...ok.filter(sp => sp !== first)] : ok;
+    if (order.length) rebuildTour(order, tourKmh);
     mode = MODES.find(m => m.kmh === tourKmh) || MODES.find(m => m.id === "walk");
     if (waitStart){ pausedSec += (Date.now() - waitStart) / 1000 * rate; waitStart = 0; }
+
+    /* 도착했으니 화면을 그 도시로 새로 연다 */
+    viewMode = "map";
+    curTheme = "metro";
+    satKakao = null; satRoute = null; satDone = null; chevrons = [];
+    if (typeof satLeaf !== "undefined"){ satLeaf = null; leafRoute = null; leafDone = null; }
+    $("#sat").innerHTML = "";
+    rv = null; rvc = null; panoAt = -1e9; lastPano = null;
+    $("#road").innerHTML = "";
+    applyView();
     setAvatar();
-    refresh();
+    jump(want);
   };
   $("#arriveNo").onclick = () => {
     $("#arrive").style.display = "none";
+    if (askedTour && waitStart && travelled >= travelEndM - 100){
+      /* 구경 중에 그냥 닫으면 이어서 간다 */
+      pausedSec += (Date.now() - waitStart) / 1000 * rate; waitStart = 0;
+      return;
+    }
     waitStart = 0;
     end(true);
   };
   $("#jump").onclick = () => {
     const t = nextStop();
-    if (!t){ banner("더 갈 곳이 없어", ""); return; }
+    if (!t){                                   // 갈 곳이 없으면 직접 고른다
+      waitStart = waitStart || Date.now();
+      $("#arriveName").textContent = "어디로 갈까?";
+      $("#arriveSub").textContent = "가고 싶은 곳을 골라줘";
+      fillArrive();
+      $("#arrive").style.display = "flex";
+      return;
+    }
     startM += (t.m - want);
     want = t.m;
     jump(want);
@@ -2391,7 +2420,7 @@ function buildMap(){
     zIndex:3, content:'<div class="pin me"></div>', xAnchor:0.5, yAnchor:0.5 });
   fitMini();
   $("#swap").onclick = () => {
-    const ring = roadOK() ? ["map","road","draw"] : ["map","draw"];
+    const ring = roadOK() ? ["map","road"] : ["map"];
     viewMode = ring[(ring.indexOf(viewMode) + 1) % ring.length];
     applyView();
   };
@@ -2401,22 +2430,46 @@ function buildMap(){
   };
   $("#arriveYes").onclick = () => {
     $("#arrive").style.display = "none";
-    const rest = spots.filter((_,i) => i !== tourFirst);
-    const order = spots[tourFirst] ? [spots[tourFirst], ...rest] : spots.slice();
-    if (order.length && order[0].lat) rebuildTour(order, tourKmh);
+    const ok = spots.filter(sp => typeof sp.lat === "number" && typeof sp.lng === "number");
+    const first = spots[tourFirst];
+    const order = (first && typeof first.lat === "number")
+      ? [first, ...ok.filter(sp => sp !== first)] : ok;
+    if (order.length) rebuildTour(order, tourKmh);
     mode = MODES.find(m => m.kmh === tourKmh) || MODES.find(m => m.id === "walk");
     if (waitStart){ pausedSec += (Date.now() - waitStart) / 1000 * rate; waitStart = 0; }
+
+    /* 도착했으니 화면을 그 도시로 새로 연다 */
+    viewMode = "map";
+    curTheme = "metro";
+    satKakao = null; satRoute = null; satDone = null; chevrons = [];
+    if (typeof satLeaf !== "undefined"){ satLeaf = null; leafRoute = null; leafDone = null; }
+    $("#sat").innerHTML = "";
+    rv = null; rvc = null; panoAt = -1e9; lastPano = null;
+    $("#road").innerHTML = "";
+    applyView();
     setAvatar();
-    refresh();
+    jump(want);
   };
   $("#arriveNo").onclick = () => {
     $("#arrive").style.display = "none";
+    if (askedTour && waitStart && travelled >= travelEndM - 100){
+      /* 구경 중에 그냥 닫으면 이어서 간다 */
+      pausedSec += (Date.now() - waitStart) / 1000 * rate; waitStart = 0;
+      return;
+    }
     waitStart = 0;
     end(true);
   };
   $("#jump").onclick = () => {
     const t = nextStop();
-    if (!t){ banner("더 갈 곳이 없어", ""); return; }
+    if (!t){                                   // 갈 곳이 없으면 직접 고른다
+      waitStart = waitStart || Date.now();
+      $("#arriveName").textContent = "어디로 갈까?";
+      $("#arriveSub").textContent = "가고 싶은 곳을 골라줘";
+      fillArrive();
+      $("#arrive").style.display = "flex";
+      return;
+    }
     startM += (t.m - want);
     want = t.m;
     jump(want);
@@ -2601,6 +2654,10 @@ const overseas = () => (from && !inKorea(from)) || (to && !inKorea(to));
 let satRoute = null, satDone = null, wLastMove = 0;
 
 /* 국내는 카카오 스카이뷰 — 훨씬 선명합니다. 해외는 전 세계 위성 타일. */
+function nowPt(){
+  try { return (path.length && cum.length) ? at(want || startM || 0) : from; }
+  catch(e){ return from; }
+}
 function buildSat(){
   if (satKakao || satLeaf) return;
   const thinPts = path.filter((_, i) => i % Math.max(1, Math.ceil(path.length / 1200)) === 0);
@@ -2614,13 +2671,13 @@ function buildSat(){
     L.polyline(thinPts.map(q => [q.lat, q.lng]), { color:"#0F7A38", weight:11, opacity:.45 }).addTo(satLeaf);
     leafRoute = L.polyline(thinPts.map(q => [q.lat, q.lng]), { color:"#25B24C", weight:7, opacity:.95 }).addTo(satLeaf);
     leafDone  = L.polyline([], { color:"#B9C0C6", weight:7, opacity:.95 }).addTo(satLeaf);
-    satLeaf.setView([from.lat, from.lng], satZoom());
+    satLeaf.setView([nowPt().lat, nowPt().lng], satZoom());
     [0, 150, 500].forEach(t => setTimeout(() => { try { satLeaf.invalidateSize(); } catch(e){} }, t));
     return;
   }
 
   satKakao = new kakao.maps.Map($("#sat"), {
-    center: new kakao.maps.LatLng(from.lat, from.lng),
+    center: new kakao.maps.LatLng(nowPt().lat, nowPt().lng),
     level: satLevel(), draggable:false, scrollwheel:false,
     disableDoubleClickZoom:true, keyboardShortcuts:false
   });
@@ -3138,7 +3195,7 @@ function buildSkyScene(){
 
 /* ── 장면 ── */
 function buildScene(key){
-  if (isPlane()) return buildSkyScene();
+  if (flying()) return buildSkyScene();
   curTheme = key;
   const T = THEMES[key] || THEMES.hill, P = palette();
   const far = [], mid = [], near = [], deco = [];
@@ -3277,7 +3334,8 @@ function sceneTick(){
 
 function applyView(){
   if (viewMode === "sat" || (viewMode === "road" && !roadOK())) viewMode = "map";
-  sceneOn = (viewMode === "draw");
+  if (viewMode === "draw") viewMode = "map";
+  sceneOn = false;
   const satOn = (viewMode === "map");
   const roadOn = (viewMode === "road");
   $("#road").style.display = roadOn ? "block" : "none";
@@ -3286,7 +3344,8 @@ function applyView(){
   $("#scene").style.display = sceneOn ? "block" : "none";
   $("#sat").style.display   = satOn ? "block" : "none";
   $("#satzoom").style.display = (viewMode === "map") ? "flex" : "none";
-  $("#swap").textContent = viewMode === "map" ? (roadOK() ? "👀" : "🖼") : viewMode === "road" ? "🖼" : "🗺";
+  $("#swap").textContent = (viewMode === "map") ? "거리뷰" : "지도";
+  $("#swap").style.display = roadOK() ? "" : "none";
   if (satOn){
     buildSat();
     setTimeout(() => {
@@ -3312,7 +3371,10 @@ function run(){
   const jb0 = $("#jump");
   if (jb0){
     const t0 = nextStop();
-    if (t0){ jb0.style.display = "flex"; jb0.querySelector("b").textContent = t0.name; }
+    jb0.style.display = "flex";
+    jb0.dataset.pick = t0 ? "" : "1";
+    jb0.querySelector("span").textContent = t0 ? "⏭" : "📍";
+    jb0.querySelector("b").textContent = t0 ? t0.name : "다른 곳 갈래";
   }
   timer = setInterval(tick, 500);
   document.addEventListener("visibilitychange", onHide);
@@ -3330,13 +3392,15 @@ function tick(){
   const jb = $("#jump");
   if (jb){
     const t = nextStop();
-    if (t){ jb.style.display = "flex"; jb.querySelector("b").textContent = t.name; }
-    else jb.style.display = "none";
+    jb.style.display = "flex";
+    jb.dataset.pick = t ? "" : "1";
+    jb.querySelector("span").textContent = t ? "⏭" : "📍";
+    jb.querySelector("b").textContent = t ? t.name : "다른 곳 갈래";
   }
 
   if (waitStart) return;                            // 도착해서 물어보는 중
   if (Date.now() < pausedUntil) return;              // 정차 중
-  want = Math.min(totalM, startM + distAt(elapsed - pausedSec));
+  want = Math.max(want, Math.min(totalM, startM + distAt(elapsed - pausedSec)));
 
   /* 목적지에 닿으면 구경할지 물어본다 */
   if (!askedTour && travelEndM > 1000 && want >= travelEndM - 60 && spots.length){
