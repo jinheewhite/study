@@ -127,8 +127,6 @@ const NAVER_KEY = "";
        background:repeating-linear-gradient(90deg,#ffffff1f 0 22px,#0000 22px 60px);
        animation:flow 1.1s linear infinite}
   @keyframes flow{to{background-position:-60px 0}}
-  #ride.plane #scene:after{content:"";position:absolute;inset:0;pointer-events:none;
-    background:radial-gradient(ellipse 42% 62% at 50% 46%, #0000 0 68%, #101418 74%, #0B0E11 100%)}
   #tunnel{position:absolute;inset:0;display:none;background:#0B0C0E;overflow:hidden;z-index:6}
   #tunnel .far{position:absolute;left:50%;top:46%;width:22%;height:26%;transform:translate(-50%,-50%);
        border-radius:50% 50% 12% 12%;background:radial-gradient(#6E7A72,#1A1E20 70%);opacity:.5}
@@ -1514,6 +1512,7 @@ function buildSat(){
     return;
   }
   if (satMap) return;
+  if (typeof L === "undefined"){ buildSatKakaoFallback(); return; }
   satMap = L.map($("#sat"), { zoomControl:false, attributionControl:false, dragging:false,
                               scrollWheelZoom:false, doubleClickZoom:false, keyboard:false,
                               zoomAnimation:false, fadeAnimation:false });
@@ -1526,6 +1525,18 @@ function buildSat(){
                       { color:"#C08A50", weight:3, opacity:.6, dashArray:"7 8" }).addTo(satMap);
   wDone  = L.polyline([], { color:"#E4572E", weight:4, opacity:.95 }).addTo(satMap);
   satMap.setView([from.lat, from.lng], satZoom());
+  [0, 120, 400, 900].forEach(t => setTimeout(() => {
+    try { satMap.invalidateSize(); satMap.setView([at(want).lat, at(want).lng], satZoom(), { animate:false }); } catch(e){}
+  }, t));
+}
+
+function buildSatKakaoFallback(){
+  if (satKakao) return;
+  satKakao = new kakao.maps.Map($("#sat"), {
+    center: new kakao.maps.LatLng(at(want).lat, at(want).lng),
+    level: 12, draggable:false, scrollwheel:false
+  });
+  setTimeout(() => satKakao.relayout(), 80);
 }
 
 /* 길 위에 진행 방향 화살표 */
@@ -1999,7 +2010,7 @@ function buildSkyScene(){
   const dup = (a) => a.join("") + a.join("");
 
   $("#scene").innerHTML = `
-  <svg viewBox="0 0 ${SW} ${SH}" preserveAspectRatio="xMidYMid slice">
+  <svg viewBox="0 0 ${SW} ${SH}" preserveAspectRatio="none">
     <defs><linearGradient id="sky2" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="${hi}"/><stop offset="62%" stop-color="${lo}"/>
       <stop offset="100%" stop-color="${sea}"/></linearGradient></defs>
@@ -2011,7 +2022,6 @@ function buildSkyScene(){
     <g id="lFar">${dup(far)}</g>
     <g id="lMid">${dup(mid)}</g>
     <g id="lNear">${dup(near)}</g>
-    <g id="lSign">${sign(0)}${sign(560)}</g>
   </svg>`;
 }
 
@@ -2235,8 +2245,8 @@ function jumpInner(m){
           satKakao = null; satMap = null; satTiles = null; satTileNow = "";
           satRoute = null; satDone = null; wRoute = null; wDone = null;
           $("#sat").innerHTML = "";
+          chevrons = [];
           buildSat();
-          setTimeout(() => { if (satMap) satMap.invalidateSize(); }, 80);
         }
       }
     }
