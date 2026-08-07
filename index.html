@@ -66,6 +66,11 @@ const NAVER_KEY = "";
   #ratelist button[aria-pressed="true"] .sp{color:var(--dawn)}
   #ratelist .de{flex:1;font-size:12.5px;line-height:1.6}
   #ratelist .de b{color:#DCE8E5;font-weight:600}
+  .bigpick{display:block;width:100%;padding:16px 18px;margin-bottom:10px;border-radius:14px;
+    border:1px solid var(--line);background:var(--panel);color:var(--paper);font-family:inherit;text-align:left}
+  .bigpick[aria-pressed="true"]{border-color:var(--dawn);background:#1A2A26}
+  .bigpick b{font-size:16px}
+  .bigpick small{display:block;margin-top:5px;font-size:12px;color:var(--dim)}
   #fromBtn{height:42px;padding:0 16px;border-radius:10px;border:1px solid var(--line);
     background:none;color:var(--dim);font-size:13px;font-family:inherit}
   #more{margin-top:22px;border-top:1px solid var(--line);padding-top:6px}
@@ -100,7 +105,7 @@ const NAVER_KEY = "";
   #nav #next:disabled{opacity:.3}
   #tripBtn{width:100%;height:54px;margin-top:12px;border-radius:12px;border:1px solid var(--dawn);
     background:#241C15;color:var(--dawn);font-size:16px;font-family:inherit}
-  #tripList{display:none;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+  #tripList{display:none;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
   #tripList button{height:56px;border-radius:12px;border:1px solid var(--line);background:var(--panel);
     color:var(--paper);font-size:14px;font-family:inherit;line-height:1.4}
   #tripList button small{display:block;font-size:11px;color:var(--dim);margin-top:3px}
@@ -288,12 +293,19 @@ const NAVER_KEY = "";
 
   <section class="step" data-step="1">
     <h1 id="q1">오늘 어디 가고 싶어?</h1>
-    <p class="tiny">가고 싶은 곳을 쓰거나 아래에서 골라줘</p>
-    <input id="qTo" placeholder="예: 서울역 · 부산 해운대 · 파리" autocomplete="off">
-    <div class="sug" id="sTo"></div>
-    <button id="tripBtn">✈  유명한 곳에서 골라볼래</button>
-    <div id="tripList"></div>
-    <p class="tiny" style="margin-top:20px" id="fromLine"><b id="fromNow">우리 집</b><span id="fromLabel">에서 출발할게</span></p>
+    <div class="chips" id="kinds"></div>
+    <div id="pickWrap" style="display:none">
+      <input id="qTo" placeholder="가고 싶은 곳" autocomplete="off">
+      <div class="sug" id="sTo"></div>
+      <div id="tripList"></div>
+    </div>
+    <p class="tiny" id="pickInfo"></p>
+  </section>
+
+  <section class="step" data-step="2">
+    <h1>어디서 출발할까?</h1>
+    <p class="tiny" id="startInfo">건너뛰고 싶은 만큼 골라도 돼</p>
+    <div id="startList"></div>
     <button id="fromBtn">집 위치 정하기</button>
     <div id="fromWrap" style="display:none">
       <button id="here">📍  여기를 우리 집으로</button>
@@ -302,29 +314,34 @@ const NAVER_KEY = "";
     </div>
   </section>
 
-  <section class="step" data-step="2">
+  <section class="step" data-step="3">
+    <h1>어떻게 갈까?</h1>
+    <p class="tiny" id="modeInfo"></p>
+    <div class="chips" id="modes"></div>
+  </section>
+
+  <section class="step" data-step="4">
     <h1>집중 시간은?</h1>
     <p class="tiny">그동안 폰은 내려놓는 거야</p>
     <div class="chips" id="times"></div>
   </section>
 
-  <section class="step" data-step="3">
+  <section class="step" data-step="5">
     <h1 id="q6">우리 출발할까?</h1>
     <p class="tiny">지금부터 <b id="mm">25</b>분, 폰은 내려놓자</p>
     <div id="plan"></div>
     <button class="go" id="start">출발</button>
-
     <p class="note" id="hint"></p>
     <div id="stamps"></div>
     <div id="album"></div>
     <button id="switch">이름 바꾸기</button>
     <div style="display:none">
-      <div class="chips" id="modes"></div>
       <div class="chips" id="views"></div>
       <div class="chips" id="musics"></div>
       <div id="ratelist"></div>
       <button id="around"></button>
       <button id="flyBtn"></button>
+      <span id="fromNow"></span><span id="fromLabel"></span><span id="fromLine"></span>
     </div>
   </section>
 
@@ -445,7 +462,7 @@ function init(){
   ps = new kakao.maps.services.Places();
   geo = new kakao.maps.services.Geocoder();
   bindSearch("#qFrom", "#sFrom", (p)=>{ saveHome(p); check(); }, "from");
-  bindSearch("#qTo",   "#sTo",   (p)=>{ to = p; touring = false; skipTouched = false; if (window.resetHome) window.resetHome(); if (window.closeTrips) window.closeTrips(); check(); }, "to");
+  bindSearch("#qTo",   "#sTo",   async (p)=>{ to = p; touring = false; skipTouched = false; startM = 0; if (window.resetHome) window.resetHome(); if (window.closeTrips) window.closeTrips(); await check(); if (window.showStep) window.showStep(2); }, "to");
   function useHere(){
     const b = $("#here");
     if (!navigator.geolocation){ b.textContent = "이 기기는 위치를 못 찾습니다"; return; }
@@ -469,9 +486,87 @@ function init(){
   }
   $("#here").onclick = useHere;
 
+  /* ── 여행 종류 ── */
+  const KINDS = [
+    { id:"local",    label:"동네 한 바퀴", info:"집 근처를 걸어서 둘러봐" },
+    { id:"domestic", label:"국내",        info:"가고 싶은 도시를 정해줘" },
+    { id:"abroad",   label:"해외",        info:"멀리 있는 곳도 갈 수 있어" },
+  ];
+  function renderKinds(){
+    const box = $("#kinds"); box.innerHTML = "";
+    KINDS.forEach(k => {
+      const b = document.createElement("button");
+      b.className = "chip"; b.textContent = k.label;
+      b.setAttribute("aria-pressed", tripKind === k.id);
+      b.onclick = () => pickKind(k);
+      box.appendChild(b);
+    });
+  }
+  async function pickKind(k){
+    tripKind = k.id;
+    renderKinds();
+    $("#pickInfo").textContent = k.info;
+    skipTouched = false; startM = 0;
+    if (k.id === "local"){
+      $("#pickWrap").style.display = "none";
+      if (!homeFrom){ $("#warn").textContent = "먼저 집 위치를 정해줘"; showStep(2); return; }
+      from = { ...homeFrom };
+      to = { name: "우리 동네", lat: homeFrom.lat, lng: homeFrom.lng };
+      touring = true;
+      await check();
+      showStep(2);
+      return;
+    }
+    $("#pickWrap").style.display = "block";
+    $("#qTo").value = ""; $("#sTo").innerHTML = "";
+    to = null;
+    renderTrips();
+  }
+
+  /* ── 어디서 출발할까 ── */
+  function renderStart(){
+    const box = $("#startList"); box.innerHTML = "";
+    const opts = [{ m:0, label:(tripKind === "local" ? "집에서 걸어서" : "우리 집에서 처음부터") }];
+    if (groundM > 1000) opts.push({ m:groundM, label:depName + "부터" });
+    if (travelEndM > 1000 && travelEndM > groundM + 1000)
+      opts.push({ m:travelEndM, label:(to ? to.name : "도착지") + " 도착부터" });
+    opts.forEach(o => {
+      const b = document.createElement("button");
+      b.className = "bigpick";
+      b.setAttribute("aria-pressed", Math.abs(startM - o.m) < 1);
+      b.innerHTML = `<b>${esc(o.label)}</b>` +
+        (o.m > 0 ? `<small>여기까지는 건너뛰기</small>` : `<small>처음부터 다 가기</small>`);
+      b.onclick = () => { startM = o.m; skipTouched = true; renderStart(); refresh(); showStep(3); };
+      box.appendChild(b);
+    });
+    $("#startInfo").textContent = opts.length > 1 ? "건너뛰고 싶은 만큼 골라도 돼" : "여기서 시작할게";
+  }
+
+  /* ── 어떻게 갈까 ── */
+  function renderModes(){
+    const box = $("#modes"); box.innerHTML = "";
+    const flightPart = travelEndM > 0 && groundM > 0 && startM < groundM;
+    let list;
+    if (tripKind === "local") list = ["walk","run","bike","car"];
+    else if (tripKind === "abroad") list = startM >= travelEndM ? ["walk","run"] : ["car"];
+    else list = startM >= travelEndM ? ["walk","run"] : ["walk","car"];
+    list.map(id => MODES.find(m => m.id === id)).forEach(m => {
+      const b = document.createElement("button");
+      b.className = "chip"; b.innerHTML = `${m.name}<br><small style="opacity:.6">${m.kmh}km/h</small>`;
+      b.setAttribute("aria-pressed", mode.id === m.id);
+      b.onclick = async () => { mode = m; await check(); renderModes(); setTimeout(() => showStep(4), 220); };
+      box.appendChild(b);
+    });
+    $("#modeInfo").textContent =
+      startM >= travelEndM && travelEndM > 0 ? "도착해서 걸어 다닐 방법이야"
+      : tripKind === "abroad" ? (flightPart ? depName + "까지는 이걸로, 그 뒤엔 비행기" : "이걸로 갈게")
+      : "";
+  }
+
   /* ── 한 걸음씩 ── */
-  const STEPS = 3;
+  const STEPS = 5;
   let step = 1;
+  let tripKind = "";
   const dots = $("#dots");
   for (let i = 0; i < STEPS; i++) dots.appendChild(document.createElement("i"));
 
@@ -488,13 +583,17 @@ function init(){
     $("#next").style.display = step === STEPS ? "none" : "";
     $("#warn").textContent = "";
     $("#setup").classList.toggle("mid", step < STEPS);
-    if (step >= 2) refresh();
+    if (step >= 4) refresh();
+    if (step === 2) renderStart();
+    if (step === 3) renderModes();
     if (step === STEPS){
       const mm = $("#mm"); if (mm) mm.textContent = minutes;
     }
     window.scrollTo(0, 0);
   }
   window.showStep = showStep;
+  window.renderKinds = renderKinds;
+  renderKinds();
   window.refreshNav = () => { if (canGo(step)) $("#warn").textContent = ""; };
   $("#prev").onclick = () => showStep(step - 1);
   /* 칸에 글자만 있어도 알아서 찾아준다 */
@@ -543,7 +642,14 @@ function init(){
   });
 
   const tl = $("#tripList");
-  TRIPS.forEach(t => {
+  function renderTrips(){
+    tl.innerHTML = "";
+    tl.style.display = "grid";
+    const list = TRIPS.filter(t => tripKind === "abroad" ? !t.kr : t.kr);
+    list.forEach(t => buildTrip(t));
+  }
+  window.renderTrips = renderTrips;
+  function buildTrip(t){
     const b = document.createElement("button");
     b.innerHTML = `${t.n}<small>${t.s}</small>`;
     b.onclick = async () => {
@@ -562,7 +668,7 @@ function init(){
       if (window.showStep) window.showStep(2);
     };
     tl.appendChild(b);
-  });
+  }
   $("#fromBtn").onclick = () => {
     const w = $("#fromWrap");
     const open = w.style.display === "block";
@@ -570,15 +676,7 @@ function init(){
     $("#fromBtn").textContent = open ? "집 위치 정하기" : "닫기";
   };
   window.resetHome = () => { if (homeFrom) from = { ...homeFrom }; };
-  window.closeTrips = () => {
-    tl.style.display = "none";
-    $("#tripBtn").textContent = "✈  다른 곳으로 바꿀래";
-  };
-  $("#tripBtn").onclick = () => {
-    const open = tl.style.display === "grid";
-    tl.style.display = open ? "none" : "grid";
-    $("#tripBtn").textContent = open ? (to ? "✈  다른 곳으로 바꿀래" : "✈  유명한 곳에서 골라볼래") : "✈  어디로 갈까?";
-  };
+  window.closeTrips = () => { tl.style.display = "none"; };
 
 
   $("#flyBtn").onclick = async () => {
@@ -1008,7 +1106,15 @@ const TRIPS = [
   { n:"인터라켄",  s:"알프스 마을",         lat:46.6863, lng:7.8632 },
   { n:"기자",      s:"피라미드",           lat:29.9792, lng:31.1342 },
   { n:"하와이",    s:"와이키키 해변",       lat:21.2793, lng:-157.8292 },
-  { n:"제주",      s:"성산일출봉",         lat:33.4581, lng:126.9424 },
+  { n:"시드니",    s:"오페라하우스",       lat:-33.8568, lng:151.2153 },
+  { n:"방콕",      s:"왕궁과 야시장",       lat:13.7500, lng:100.4914 },
+  { n:"제주",      s:"성산일출봉",         lat:33.4581, lng:126.9424, kr:1 },
+  { n:"서울",      s:"경복궁과 남산",       lat:37.5796, lng:126.9770, kr:1 },
+  { n:"부산",      s:"해운대와 감천마을",    lat:35.1587, lng:129.1604, kr:1 },
+  { n:"경주",      s:"불국사와 첨성대",      lat:35.8347, lng:129.2194, kr:1 },
+  { n:"강릉",      s:"경포대와 바다",       lat:37.7952, lng:128.8961, kr:1 },
+  { n:"여수",      s:"밤바다",             lat:34.7604, lng:127.6622, kr:1 },
+  { n:"전주",      s:"한옥마을",           lat:35.8150, lng:127.1530, kr:1 },
 ];
 
 /* 주변 명소 하나를 골라 좌표까지 가져온다 */
@@ -1406,8 +1512,8 @@ function applyName(n){
   $("#intro").style.display = "none";
   $("#setup").style.display = "flex";
   $("#brand").textContent = NAME + "의 프로젝트";
-  const tb = $("#tripBtn"); if (tb) tb.textContent = "✈  유명한 곳에서 골라볼래";
   if (window.showStep) window.showStep(1);
+  if (window.renderKinds) window.renderKinds();
   const q1 = $("#q1"); if (q1) q1.innerHTML = voc(NAME) + ",<br>오늘 어디 가고 싶어?";
   document.title = NAME + "의 프로젝트";
   renderStamps();
@@ -2623,6 +2729,11 @@ function run(){
   startQuotes();
   startPlaces();
   jump(startM);
+  const jb0 = $("#jump");
+  if (jb0){
+    const t0 = nextStop();
+    if (t0){ jb0.style.display = "flex"; jb0.querySelector("b").textContent = t0.name; }
+  }
   timer = setInterval(tick, 500);
   document.addEventListener("visibilitychange", onHide);
 }
@@ -2635,6 +2746,13 @@ function tick(){
   elapsed = (Date.now() - startTs) / 1000 * rate;
   const total = minutes * 60;
   $("#clock").textContent = fmt(Math.max(0, total - elapsed));
+
+  const jb = $("#jump");
+  if (jb){
+    const t = nextStop();
+    if (t){ jb.style.display = "flex"; jb.querySelector("b").textContent = t.name; }
+    else jb.style.display = "none";
+  }
 
   if (Date.now() < pausedUntil) return;              // 정차 중
   want = Math.min(totalM, startM + distAt(elapsed - pausedSec));
@@ -2731,12 +2849,6 @@ function jumpInner(m){
     ? (left < 1 ? "도착합니다" : `곧 도착 · ${left.toFixed(1)}km`)
     : `${to.name} ${left.toFixed(0)}km · ${mins < 60 ? mins + "분" : Math.floor(mins/60) + "시간 " + (mins%60) + "분"}`;
 
-  const jb = $("#jump");
-  if (jb){
-    const t = nextStop();
-    if (t){ jb.style.display = "flex"; jb.querySelector("b").textContent = t.name + " 로 건너뛰기"; }
-    else jb.style.display = "none";
-  }
   const tag = nx ? ({rest:"휴게소", tunnel:"터널", bridge:"다리", spot:""})[nx.kind] : "";
   $("#next").textContent = nx ? `다음 ${tag} · ${nx.name}` : `${to.name}까지`;
   $("#left").textContent = ((nx ? nx.m - m : totalM - m) / 1000).toFixed(1) + " km";
