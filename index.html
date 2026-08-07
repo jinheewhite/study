@@ -1504,10 +1504,6 @@ function buildSat(){
       level: satLevel(), draggable:false, scrollwheel:false,
       disableDoubleClickZoom:true, keyboardShortcuts:false
     });
-    meOverlay = new kakao.maps.CustomOverlay({
-      map: satKakao, position: new kakao.maps.LatLng(from.lat, from.lng),
-      content: meContent(1), yAnchor: 1, zIndex: 5,
-    });
     setTimeout(() => satKakao.relayout(), 80);
     return;
   }
@@ -1528,12 +1524,11 @@ function buildSat(){
 
 /* 카카오 축척 — 숫자가 작을수록 가깝습니다 */
 function satLevel(){
-  const base = mode.id === "walk" ? 1 : 5;   // 걷기는 가게 이름까지, 차는 동네 단위
+  const base = mode.id === "walk" ? 3 : 7;   // 길이 앞뒤로 길게 보이도록
   return Math.max(1, Math.min(12, base - satAdj));
 }
 
 /* ── 지도 위를 걸어가는 여고생 ── */
-let meOverlay = null, meDir = 1;
 
 function girlSVG(dir, moving){
   const A = 22, dur = "0.9s";
@@ -1586,9 +1581,6 @@ function carSVG(dir){
     </g></svg>`;
 }
 
-function meContent(dir){
-  return (mode.id === "walk") ? girlSVG(dir, true) : carSVG(dir);
-}
 
 
 /* ── 지도 위를 걸어가는 사람 ── */
@@ -1794,11 +1786,6 @@ function satTick(){
     const c = new kakao.maps.LatLng(q.lat, q.lng);
     satKakao.setCenter(c);
     if (satDone) satDone.setPath(done.map(d => new kakao.maps.LatLng(d.lat, d.lng)));
-    if (typeof meOverlay !== "undefined" && meOverlay){
-      meOverlay.setPosition(c);
-      const nd = (q.pan > 180) ? -1 : 1;
-      if (nd !== meDir){ meDir = nd; meOverlay.setContent(meContent(nd)); }
-    }
   } else if (satMap){
     if (satTiles && satTileNow !== "map"){
       Object.keys(satTiles).forEach(k => { if (satMap.hasLayer(satTiles[k])) satMap.removeLayer(satTiles[k]); });
