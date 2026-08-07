@@ -262,43 +262,37 @@ const NAVER_KEY = "";
   </section>
 
   <section class="step" data-step="2">
-    <h1>어떻게 갈거니?</h1>
-    <p class="tiny">비행기를 고르면 해외도 갈 수 있어</p>
-    <div class="chips" id="modes"></div>
-  </section>
-
-  <section class="step" data-step="3">
     <h1>어디로 갈거니?</h1>
     <p class="tiny">가고 싶은 곳을 찾아서 눌러줘</p>
     <input id="qTo" placeholder="예: 서울역 · 비행기면 도쿄, 파리" autocomplete="off">
     <div class="sug" id="sTo"></div>
   </section>
 
-  <section class="step" data-step="4">
+  <section class="step" data-step="3">
     <h1>집중 시간은?</h1>
     <p class="tiny">그동안 폰은 내려놓는 거야</p>
     <div class="chips" id="times"></div>
   </section>
 
-  <section class="step" data-step="5">
+  <section class="step" data-step="4">
     <h1>지도로 볼까,<br>그림으로 볼까?</h1>
     <p class="tiny">가는 동안 보게 될 화면이야</p>
     <div class="chips" id="views"></div>
   </section>
 
-  <section class="step" data-step="6">
+  <section class="step" data-step="5">
     <h1>음악은 틀어줄까?</h1>
     <p class="tiny">조용한 피아노가 흐를 거야</p>
     <div class="chips" id="musics"></div>
   </section>
 
-  <section class="step" data-step="7">
+  <section class="step" data-step="6">
     <h1>얼마나 빨리 갈까?</h1>
     <p class="tiny">앉아 있어야 하는 시간이 달라져</p>
     <div id="ratelist"></div>
   </section>
 
-  <section class="step" data-step="8">
+  <section class="step" data-step="7">
     <h1 id="q6">우리 출발할까?</h1>
     <p class="tiny">지금부터 <b id="mm">25</b>분, 폰은 내려놓자</p>
     <div id="plan"></div>
@@ -396,16 +390,6 @@ function chips(sel, list, get, set){
     box.appendChild(b);
   });
 }
-chips("#modes", MODES.map(m=>({label:`${m.name} ${m.kmh}km/h`, value:m})), ()=>mode, v=>{
-  const wasPlane = isPlane();
-  mode = v;
-  if (isPlane() && !wasPlane && !from){   // 출발지가 비어 있을 때만 인천공항
-    from = INCHEON;
-    $("#qFrom").value = INCHEON.name;
-    $("#sFrom").innerHTML = "";
-  }
-  check();
-});
 chips("#times", TIMES.map(t=>({label:t+"분", value:t})), ()=>minutes, v=>minutes=v);
 const VIEWS = [{label:"지도",value:"map"},{label:"그림 풍경",value:"draw"}];
 if (NAVER_KEY) VIEWS.splice(1, 0, {label:"거리뷰",value:"road"});
@@ -424,8 +408,8 @@ window.addEventListener("load", () => {
 function init(){
   ps = new kakao.maps.services.Places();
   geo = new kakao.maps.services.Geocoder();
-  bindSearch("#qFrom", "#sFrom", (p)=>{ from = p; check(); });
-  bindSearch("#qTo",   "#sTo",   (p)=>{ to   = p; check(); });
+  bindSearch("#qFrom", "#sFrom", (p)=>{ from = p; check(); }, "from");
+  bindSearch("#qTo",   "#sTo",   (p)=>{ to   = p; check(); }, "to");
   function useHere(){
     const b = $("#here");
     if (!navigator.geolocation){ b.textContent = "이 기기는 위치를 못 찾습니다"; return; }
@@ -450,14 +434,14 @@ function init(){
   $("#here").onclick = useHere;
 
   /* ── 한 걸음씩 ── */
-  const STEPS = 8;
+  const STEPS = 7;
   let step = 1;
   const dots = $("#dots");
   for (let i = 0; i < STEPS; i++) dots.appendChild(document.createElement("i"));
 
   function canGo(n){
     if (n === 1) return !!from;
-    if (n === 3) return !!to;
+    if (n === 2) return !!to;
     return true;
   }
   function showStep(n){
@@ -469,7 +453,7 @@ function init(){
     $("#next").style.display = step === STEPS ? "none" : "";
     $("#warn").textContent = "";
     $("#setup").classList.toggle("mid", step < STEPS);
-    if (step >= 7) refresh();
+    if (step >= 6) refresh();
     if (step === STEPS){
       const mm = $("#mm"); if (mm) mm.textContent = minutes;
     }
@@ -482,9 +466,8 @@ function init(){
   function resolve(which){
     const q = $(which === "from" ? "#qFrom" : "#qTo").value.trim();
     if (!q) return Promise.resolve(null);
-    if (isPlane()){
-      return worldSearch(q).then(list => list[0] || null).catch(() => null)
-        .then(hit => hit || kakaoFirst(q));
+    if (which === "to"){
+      return kakaoFirst(q).then(hit => hit || worldSearch(q).then(l => l[0] || null).catch(() => null));
     }
     return kakaoFirst(q);
   }
@@ -518,7 +501,7 @@ function init(){
   };
 
   /* 고르면 저절로 다음으로 */
-  ["#modes", "#times", "#views", "#musics"].forEach(sel => {
+  ["#times", "#views", "#musics"].forEach(sel => {
     $(sel).addEventListener("click", (e) => {
       if (e.target.tagName === "BUTTON") setTimeout(() => showStep(step + 1), 260);
     });
@@ -539,7 +522,7 @@ function init(){
   else { $("#intro").style.display = "block"; $("#setup").style.display = "none"; }
 }
 
-function bindSearch(inputSel, listSel, pick){
+function bindSearch(inputSel, listSel, pick, which){
   const inp = $(inputSel), box = $(listSel);
   let t = null;
   inp.oninput = () => {
@@ -547,7 +530,7 @@ function bindSearch(inputSel, listSel, pick){
     const q = inp.value.trim();
     if (q.length < 2){ box.innerHTML = ""; return; }
     t = setTimeout(async () => {
-      if (isPlane()){
+      if (which === "to"){
         box.innerHTML = "";
         let list = [];
         try { list = await worldSearch(q); } catch(e){}
@@ -602,6 +585,7 @@ async function check(){
     if (window.refreshNav) window.refreshNav();
     return;
   }
+  autoMode();
   $("#hint").textContent = `${from.name} → ${to.name}`;
   if (window.refreshNav) window.refreshNav();
   $("#plan").style.display = "block";
@@ -640,7 +624,7 @@ function renderRates(){
       도착까지 <b>${hhmm(real)}</b> · 집중 <b>${runs}번</b></span>`;
     b.onclick = () => {
       rate = r.v; renderRates(); refresh();
-      if (window.showStep) setTimeout(() => window.showStep(8), 260);
+      if (window.showStep) setTimeout(() => window.showStep(7), 260);
     };
     box.appendChild(b);
   });
@@ -678,6 +662,8 @@ function bearing(a, b){
   return (Math.atan2(y, x) * 180/Math.PI + 360) % 360;
 }
 function at(m){
+  if (!path.length) return { lat:0, lng:0, pan:0 };
+  if (path.length === 1) return { lat:path[0].lat, lng:path[0].lng, pan:0 };
   m = Math.max(0, Math.min(totalM, m));
   let i = 1;
   while (i < cum.length-1 && cum[i] < m) i++;
@@ -1408,6 +1394,15 @@ function countdown(){
 
 /* ═══════════ 해외 · 비행 ═══════════ */
 const isPlane = () => mode.id === "plane";
+const inKorea = (p) => p.lat > 33 && p.lat < 38.7 && p.lng > 124.5 && p.lng < 131.9;
+
+/* 거리를 보고 알아서 고른다 — 가까우면 걷기, 멀면 자가용, 아주 멀거나 해외면 비행기 */
+function autoMode(){
+  if (!from || !to) return;
+  const d = metres(from, to) / 1000;
+  const id = !inKorea(to) ? "plane" : d < 8 ? "walk" : d < 700 ? "car" : "plane";
+  mode = MODES.find(m => m.id === id) || MODES[0];
+}
 const INCHEON = { name:"인천공항", lat:37.4602, lng:126.4407 };
 let wmap = null, wline = null, wdot = null, lastGeoAt = -1e9;
 
@@ -1754,6 +1749,11 @@ function satZoom(){
 }
 function satFrame(){
   if ($("#sat").style.display !== "block"){ satRaf = null; return; }
+  try { satTick(); } catch(e){ /* 한 번 실패해도 멈추지 않는다 */ }
+  satRaf = requestAnimationFrame(satFrame);
+}
+function satTick(){
+  if (!totalM || !path.length) return;
   const q = at(want);
   if (satKakao && !isPlane()){
     satKakao.setLevel(satLevel());
@@ -1773,7 +1773,6 @@ function satFrame(){
     }
     satMap.setView([q.lat, q.lng], satZoom(), { animate:false });
   }
-  satRaf = requestAnimationFrame(satFrame);
 }
 
 /* 세계 지도 */
@@ -2088,6 +2087,10 @@ function sign(x){
 let skyStamp = "";
 function sceneFrame(){
   if (!sceneOn){ rafId = null; return; }
+  try { sceneTick(); } catch(e){ /* 멈추지 않는다 */ }
+  rafId = requestAnimationFrame(sceneFrame);
+}
+function sceneTick(){
   const nowSky = new Date().getHours() < 6 ? "n" : new Date().getHours() < 17 ? "d"
                : new Date().getHours() < 20 ? "e" : "n";
   if (skyStamp && skyStamp !== nowSky) buildScene(curTheme);
@@ -2104,7 +2107,6 @@ function sceneFrame(){
   const t = $("#tunnel");
   t.style.display = (Date.now() < tunnelUntil) ? "block" : "none";
   $("#water").style.display = (Date.now() < bridgeUntil) ? "block" : "none";
-  rafId = requestAnimationFrame(sceneFrame);
 }
 
 function applyView(){
