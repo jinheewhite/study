@@ -157,6 +157,20 @@ const NAVER_KEY = "";
   @keyframes snowfall{to{transform:translateY(24%) translateX(-3%)}}
   #fx.fog{background:linear-gradient(#ffffff00,#dfe6e8aa 60%,#dfe6e8cc);backdrop-filter:blur(1px)}
   #fx.cloud{background:linear-gradient(#00000018,#00000000 40%)}
+  #tour{display:none;margin-top:20px;border-radius:14px;overflow:hidden;border:1px solid var(--line);
+    background:#0F1B1D;position:relative}
+  #tour img{width:100%;height:210px;object-fit:cover;display:block}
+  #tour .cap{padding:14px 16px}
+  #tour .cap b{font-size:16px;color:var(--paper)}
+  #tour .cap p{margin:8px 0 0;font-size:13px;line-height:1.7;color:#8FA9A4}
+  #tour .dots{display:flex;gap:5px;padding:0 16px 14px}
+  #tour .dots i{width:6px;height:6px;border-radius:50%;background:#2E4A46}
+  #tour .dots i.on{background:var(--dawn)}
+  #album{margin-top:16px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;
+    background:var(--panel);font-size:13px;color:#8FA9A4;display:none}
+  #album b{color:var(--mint)}
+  #album .tags{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px}
+  #album .tags span{border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12px;color:#B9D6D0}
   #stamps{margin-top:18px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;
     background:var(--panel);font-size:13px;color:#8FA9A4;display:none}
   #stamps b{color:var(--dawn);font-weight:600}
@@ -260,37 +274,43 @@ const NAVER_KEY = "";
   </section>
 
   <section class="step" data-step="2">
+    <h1>무엇을 타고 갈까?</h1>
+    <p class="tiny">멀거나 해외면 비행기로 알아서 바뀌어</p>
+    <div class="chips" id="modes"></div>
+  </section>
+
+  <section class="step" data-step="3">
     <h1>어디로 갈거니?</h1>
     <p class="tiny">가고 싶은 곳을 찾아서 눌러줘</p>
     <input id="qTo" placeholder="예: 서울역 · 비행기면 도쿄, 파리" autocomplete="off">
     <div class="sug" id="sTo"></div>
   </section>
 
-  <section class="step" data-step="3">
+  <section class="step" data-step="4">
     <h1>집중 시간은?</h1>
     <p class="tiny">그동안 폰은 내려놓는 거야</p>
     <div class="chips" id="times"></div>
   </section>
 
-  <section class="step" data-step="4">
+  <section class="step" data-step="5">
     <h1>지도로 볼까,<br>그림으로 볼까?</h1>
     <p class="tiny">가는 동안 보게 될 화면이야</p>
     <div class="chips" id="views"></div>
   </section>
 
-  <section class="step" data-step="5">
+  <section class="step" data-step="6">
     <h1>음악은 틀어줄까?</h1>
     <p class="tiny">조용한 피아노가 흐를 거야</p>
     <div class="chips" id="musics"></div>
   </section>
 
-  <section class="step" data-step="6">
+  <section class="step" data-step="7">
     <h1>얼마나 빨리 갈까?</h1>
     <p class="tiny">앉아 있어야 하는 시간이 달라져</p>
     <div id="ratelist"></div>
   </section>
 
-  <section class="step" data-step="7">
+  <section class="step" data-step="8">
     <h1 id="q6">우리 출발할까?</h1>
     <p class="tiny">지금부터 <b id="mm">25</b>분, 폰은 내려놓자</p>
     <div id="plan"></div>
@@ -347,23 +367,28 @@ const NAVER_KEY = "";
   <p class="eyebrow" id="dTitle"></p>
   <h1 id="dHead"></h1>
   <p class="lead" id="dBody"></p>
+  <div id="tour"></div>
   <div id="dMap" style="height:280px;border-radius:12px;overflow:hidden;border:1px solid var(--line);margin-top:22px"></div>
-  <button class="go" onclick="location.reload()">다시 타기</button>
+  <button class="go" id="tourMore">이 도시 더 둘러보기</button>
+  <button class="go" onclick="location.reload()" style="background:none;border:1px solid var(--line);color:#8FA9A4">다시 타기</button>
+  <div id="album"></div>
 </div></div>
 
 <script>
 /* ───────── 상수 ───────── */
 const MODES = [
-  {id:"car",  name:"자가용", kmh:85},
-  {id:"plane",name:"비행기", kmh:850},
   {id:"walk", name:"걷기",   kmh:10},
+  {id:"run",  name:"뛰기",   kmh:15},
+  {id:"bike", name:"오토바이", kmh:60},
+  {id:"car",  name:"자동차", kmh:85},
+  {id:"plane",name:"비행기", kmh:850},
 ];
 const TIMES = [25, 60, 90, 120];
 const RATES = [{n:"실시간",v:1},{n:"2배",v:2},{n:"3배",v:3},{n:"5배",v:5},{n:"미리보기",v:60}];
 const STEP_M = 45;          // 로드뷰를 갱신할 거리 간격(m)
 const STOP_SEC = 12;        // 휴게소 정차 시간(초)
 
-let mode = MODES[0], minutes = 25, rate = 1, viewMode = "map", music = true, quoteOn = true;
+let mode = MODES[3], minutes = 25, rate = 1, viewMode = "map", music = true, quoteOn = true;
 let from = null, to = null;
 let path = [], cum = [], totalM = 0;   // 경로 좌표 / 누적거리 / 총거리
 let pois = [];                          // 경로 위 휴게소·명소
@@ -388,6 +413,8 @@ function chips(sel, list, get, set){
     box.appendChild(b);
   });
 }
+chips("#modes", MODES.filter(m => m.id !== "plane").map(m=>({label:`${m.name} ${m.kmh}km/h`, value:m})),
+      ()=>mode, v=>{ mode = v; check(); });
 chips("#times", TIMES.map(t=>({label:t+"분", value:t})), ()=>minutes, v=>minutes=v);
 const VIEWS = [{label:"지도",value:"map"},{label:"그림 풍경",value:"draw"}];
 if (NAVER_KEY) VIEWS.splice(1, 0, {label:"거리뷰",value:"road"});
@@ -432,14 +459,14 @@ function init(){
   $("#here").onclick = useHere;
 
   /* ── 한 걸음씩 ── */
-  const STEPS = 7;
+  const STEPS = 8;
   let step = 1;
   const dots = $("#dots");
   for (let i = 0; i < STEPS; i++) dots.appendChild(document.createElement("i"));
 
   function canGo(n){
     if (n === 1) return !!from;
-    if (n === 2) return !!to;
+    if (n === 3) return !!to;
     return true;
   }
   function showStep(n){
@@ -451,7 +478,7 @@ function init(){
     $("#next").style.display = step === STEPS ? "none" : "";
     $("#warn").textContent = "";
     $("#setup").classList.toggle("mid", step < STEPS);
-    if (step >= 6) refresh();
+    if (step >= 7) refresh();
     if (step === STEPS){
       const mm = $("#mm"); if (mm) mm.textContent = minutes;
     }
@@ -499,11 +526,41 @@ function init(){
   };
 
   /* 고르면 저절로 다음으로 */
-  ["#times", "#views", "#musics"].forEach(sel => {
+  ["#modes", "#times", "#views", "#musics"].forEach(sel => {
     $(sel).addEventListener("click", (e) => {
       if (e.target.tagName === "BUTTON") setTimeout(() => showStep(step + 1), 260);
     });
   });
+
+  $("#tourMore").onclick = async () => {
+    const b = $("#tourMore");
+    b.textContent = "둘러볼 곳을 찾는 중…";
+    const list = tourList.length ? tourList : await landmarks(to.lat, to.lng);
+    if (!list.length){ b.textContent = "둘러볼 곳을 못 찾았어요"; return; }
+    const spot = list[Math.floor(Math.random() * list.length)];
+    let hit = null;
+    try {
+      const g = await fetch(`https://ko.wikipedia.org/w/api.php?action=query&titles=`
+        + encodeURIComponent(spot.title) + `&prop=coordinates&format=json&origin=*`);
+      const j = await g.json();
+      const c = Object.values(j.query.pages)[0]?.coordinates?.[0];
+      if (c) hit = { name: spot.title, lat: c.lat, lng: c.lon };
+    } catch(e){}
+    if (!hit){ b.textContent = "둘러볼 곳을 못 찾았어요"; return; }
+
+    from = { name: to.name, lat: to.lat, lng: to.lng };
+    to = hit;
+    mode = MODES.find(m => m.id === "walk");
+    doneKm = 0; travelled = 0; want = 0; groundM = 0;
+    path = []; cum = []; totalM = 0;
+    $("#done").style.display = "none";
+    $("#setup").style.display = "flex";
+    $("#qFrom").value = from.name;
+    $("#qTo").value = to.name;
+    b.textContent = "이 도시 더 둘러보기";
+    await check();
+    if (window.showStep) window.showStep(4);
+  };
 
   $("#start").onclick = begin;
 
@@ -631,7 +688,7 @@ function renderRates(){
       도착까지 <b>${hhmm(real)}</b> · 집중 <b>${runs}번</b></span>`;
     b.onclick = () => {
       rate = r.v; rateTouched = true; renderRates(); refresh();
-      if (window.showStep) setTimeout(() => window.showStep(7), 260);
+      if (window.showStep) setTimeout(() => window.showStep(8), 260);
     };
     box.appendChild(b);
   });
@@ -810,6 +867,76 @@ function toggleMusic(){
   music = !music;
   music ? startMusic() : stopMusic();
   $("#tune").textContent = music ? "♪ 켬" : "♪ 끔";
+}
+
+/* ═══════════ 도착지 구경 ═══════════ */
+/* 위키백과에서 좌표 주변 명소와 사진을 가져옵니다. 키가 필요 없고 무료입니다. */
+async function wikiNear(lat, lng, lang){
+  const base = `https://${lang}.wikipedia.org/w/api.php`;
+  const geo = `${base}?action=query&list=geosearch&gscoord=${lat}%7C${lng}`
+            + `&gsradius=12000&gslimit=14&format=json&origin=*`;
+  const g = await (await fetch(geo)).json();
+  const ids = (g.query?.geosearch || []).map(x => x.pageid);
+  if (!ids.length) return [];
+  const det = `${base}?action=query&pageids=${ids.join("|")}`
+            + `&prop=pageimages|extracts&piprop=thumbnail&pithumbsize=900`
+            + `&exintro=1&explaintext=1&exsentences=2&format=json&origin=*`;
+  const d = await (await fetch(det)).json();
+  return Object.values(d.query?.pages || {})
+    .filter(p => p.thumbnail && p.thumbnail.source)
+    .map(p => ({ title:p.title, desc:(p.extract || "").trim(), img:p.thumbnail.source }))
+    .slice(0, 8);
+}
+
+async function landmarks(lat, lng){
+  try {
+    let list = await wikiNear(lat, lng, "ko");
+    if (list.length < 3) {
+      const en = await wikiNear(lat, lng, "en");
+      const seen = new Set(list.map(x => x.title));
+      list = list.concat(en.filter(x => !seen.has(x.title)));
+    }
+    return list.slice(0, 8);
+  } catch(e){ return []; }
+}
+
+/* 다녀온 도시 앨범 */
+function saveCity(name){
+  if (!name) return;
+  let all = [];
+  try { all = JSON.parse(get(KEY("album"), "[]")); } catch(e){}
+  if (all.some(x => x.c === name)) return;
+  all.push({ c:name, d:new Date().toLocaleDateString("ko-KR",{month:"numeric",day:"numeric"}) });
+  put(KEY("album"), JSON.stringify(all.slice(-40)));
+}
+function renderAlbum(){
+  let all = [];
+  try { all = JSON.parse(get(KEY("album"), "[]")); } catch(e){}
+  const box = $("#album");
+  if (!box) return;
+  if (!all.length){ box.style.display = "none"; return; }
+  box.style.display = "block";
+  box.innerHTML = `<b>다녀온 곳 ${all.length}곳</b><div class="tags">`
+    + all.slice(-24).reverse().map(x => `<span>${esc(x.c)}</span>`).join("") + `</div>`;
+}
+
+/* 도착 화면의 사진 넘기기 */
+let tourList = [], tourIdx = 0, tourTimer = null;
+function showTour(list){
+  tourList = list; tourIdx = 0;
+  const box = $("#tour");
+  if (!list.length){ box.style.display = "none"; return; }
+  box.style.display = "block";
+  paintTour();
+  if (tourTimer) clearInterval(tourTimer);
+  tourTimer = setInterval(() => { tourIdx = (tourIdx + 1) % tourList.length; paintTour(); }, 5000);
+}
+function paintTour(){
+  const t = tourList[tourIdx];
+  $("#tour").innerHTML =
+    `<img src="${t.img}" alt="" onerror="this.parentNode.style.display='none'">
+     <div class="cap"><b>${esc(t.title)}</b>${t.desc ? `<p>${esc(t.desc)}</p>` : ""}</div>
+     <div class="dots">${tourList.map((_,i)=>`<i class="${i===tourIdx?"on":""}"></i>`).join("")}</div>`;
 }
 
 /* ═══════════ 날씨 · 사건 · 기록 ═══════════ */
@@ -1414,8 +1541,9 @@ const inKorea = (p) => p.lat > 33 && p.lat < 38.7 && p.lng > 124.5 && p.lng < 13
 function autoMode(){
   if (!from || !to) return;
   const d = metres(from, to) / 1000;
-  const id = !inKorea(to) ? "plane" : d < 8 ? "walk" : d < 700 ? "car" : "plane";
-  mode = MODES.find(m => m.id === id) || MODES[0];
+  const mustFly = !inKorea(to) || d > 900;
+  if (mustFly) mode = MODES.find(m => m.id === "plane");
+  else if (isPlane()) mode = MODES.find(m => m.id === "car");   // 국내로 돌아오면 자동차
 }
 const INCHEON = { name:"인천공항", lat:37.4602, lng:126.4407 };
 let wmap = null, wline = null, wdot = null, lastGeoAt = -1e9;
@@ -1700,6 +1828,23 @@ function girlSVG(fast){
   </g></svg>`;
 }
 
+function bikeSVG(){
+  return `<svg viewBox="-13 -16 26 18" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cy="0.7" rx="6.5" ry="1.2" fill="#000" opacity=".26"/>
+    <g><animateTransform attributeName="transform" type="translate" values="0 0;0 -.3;0 0" dur=".45s" repeatCount="indefinite"/>
+    <circle cx="-5.4" cy="-2.2" r="2.6" fill="none" stroke="#26302F" stroke-width="1.1"/>
+    <circle cx="5.4" cy="-2.2" r="2.6" fill="none" stroke="#26302F" stroke-width="1.1"/>
+    <path d="M-5.4 -2.2 L-1 -5.6 L3.4 -5.6 L5.4 -2.2" stroke="#E4572E" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+    <path d="M-1 -5.6 L-2.6 -8.2 L0.6 -8.2" stroke="#4A5058" stroke-width="1" fill="none"/>
+    <rect x="-2.4" y="-7.4" width="4.6" height="1.6" rx=".7" fill="#2C3238"/>
+    <path d="M0.2 -8.2 L2.8 -9.2" stroke="#4A5058" stroke-width="1.1" stroke-linecap="round"/>
+    <circle cx="1.2" cy="-11.6" r="2.1" fill="#FFE3C9"/>
+    <path d="M-0.9 -11.9 a2.1 2.1 0 0 1 4.2 0 l0 -.7 a2.1 2.1 0 0 0 -4.2 0 Z" fill="#E4572E"/>
+    <path d="M-0.9 -11.4 q2.1 1.4 4.2 0" stroke="#E4572E" stroke-width="1.4" fill="none"/>
+    <path d="M-1.6 -9.9 L1.6 -9.9 L2.4 -7.6 L-2.4 -7.6 Z" fill="#2A5A6E"/>
+    </g></svg>`;
+}
+
 function carSVG(){
   return `<svg viewBox="-12 -14 24 16" xmlns="http://www.w3.org/2000/svg">
     <ellipse cy="0.6" rx="7" ry="1.4" fill="#000" opacity=".28"/>
@@ -1722,7 +1867,9 @@ function setAvatar(){
   const on = (viewMode === "map");
   el.style.display = on ? "block" : "none";
   if (!on) return;
-  const art = mode.id === "walk" ? girlSVG(false) : flying() ? planeSVG() : carSVG();
+  const art = flying() ? planeSVG()
+    : (mode.id === "walk" || mode.id === "run") ? girlSVG(mode.id === "run")
+    : mode.id === "bike" ? bikeSVG() : carSVG();
   el.innerHTML = art + (NAME ? `<b>${esc(NAME)}</b>` : "");
 }
 
@@ -2190,7 +2337,7 @@ function tick(){
 
   if (want >= totalM && !arrivedShown){
     arrivedShown = true;
-    banner(to.name + " 도착!", "남은 시간은 여기서 머물러요");
+    banner(to.name + " 도착!", "끝나면 이 도시를 구경하자");
     showQuote();
     try { navigator.vibrate?.([200,90,200,90,300]); } catch(e){}
   }
@@ -2355,6 +2502,15 @@ function end(ok){
       + (sessRest || sessTunnel ? `<br>휴게소 ${sessRest}곳 · 터널 ${sessTunnel}개 통과` : "")
       + `<br>${to.name}까지 ${((totalM-travelled)/1000).toFixed(0)}km 남음`
     : `다른 앱을 열어서 주행이 끊겼습니다. ${(travelled/1000).toFixed(1)}km 지점입니다.`;
+
+  const arrivedNow = travelled >= totalM - 1;
+  $("#tour").style.display = "none";
+  $("#tourMore").style.display = arrivedNow ? "" : "none";
+  if (arrivedNow){
+    saveCity(to.name);
+    landmarks(to.lat, to.lng).then(list => { if (list.length) showTour(list); });
+  }
+  renderAlbum();
 
   const dq = document.createElement("p");
   dq.className = "lead";
