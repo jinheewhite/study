@@ -1351,18 +1351,20 @@ async function begin(){
 async function loadRoute(){
   if (isPlane()){
     groundM = 0;
-    const air = flightPath({ lat:INCHEON.lat, lng:INCHEON.lng }, to);
-    if (metres(from, INCHEON) > 25000){          // 공항이 멀면 먼저 차로 간다
+    const dep = inKorea(to) ? nearestAirport(from) : INCHEON;   // 국내선은 가까운 공항
+    depName = dep.name;
+    const air = flightPath({ lat:dep.lat, lng:dep.lng }, to);
+    if (metres(from, dep) > 25000){               // 공항이 멀면 먼저 차로 간다
       let road = null;
       try {
         const u = `https://router.project-osrm.org/route/v1/driving/`
-                + `${from.lng},${from.lat};${INCHEON.lng},${INCHEON.lat}`
+                + `${from.lng},${from.lat};${dep.lng},${dep.lat}`
                 + `?overview=full&geometries=geojson`;
         const j = await (await fetch(u)).json();
         if (j.routes && j.routes[0])
           road = j.routes[0].geometry.coordinates.map(c => ({ lng:c[0], lat:c[1] }));
       } catch(e){}
-      if (!road) road = greatCircle(from, { lat:INCHEON.lat, lng:INCHEON.lng }, 60);
+      if (!road) road = greatCircle(from, { lat:dep.lat, lng:dep.lng }, 60);
       for (let i = 1; i < road.length; i++) groundM += metres(road[i-1], road[i]);
       path = road.concat(air.slice(1));
     } else {
@@ -1383,6 +1385,12 @@ async function loadRoute(){
       return;
     }
   } catch(e){ /* 다음 방법으로 */ }
+
+  // 길이 없으면(섬 등) 비행기로 바꿔서 다시 계산
+  if (!path.length){
+    mode = MODES.find(m => m.id === "plane");
+    return loadRoute();
+  }
 
   // 2순위: 서버의 카카오내비 프록시 (서버가 바깥으로 나갈 수 있을 때만 동작)
   const url = `${ROUTE_PROXY}?origin=${from.lng},${from.lat}&destination=${to.lng},${to.lat}`;
@@ -1541,11 +1549,28 @@ const inKorea = (p) => p.lat > 33 && p.lat < 38.7 && p.lng > 124.5 && p.lng < 13
 function autoMode(){
   if (!from || !to) return;
   const d = metres(from, to) / 1000;
-  const mustFly = !inKorea(to) || d > 900;
+  const mustFly = !inKorea(to) || d > 900 || isIsland(to) !== isIsland(from);
   if (mustFly) mode = MODES.find(m => m.id === "plane");
   else if (isPlane()) mode = MODES.find(m => m.id === "car");   // 국내로 돌아오면 자동차
 }
 const INCHEON = { name:"인천공항", lat:37.4602, lng:126.4407 };
+
+/* 국내선 공항 — 출발지에서 가장 가까운 곳에서 뜹니다 */
+const AIRPORTS = [
+  { name:"인천공항", lat:37.4602, lng:126.4407 },
+  { name:"김포공항", lat:37.5583, lng:126.7906 },
+  { name:"청주공항", lat:36.7166, lng:127.4991 },
+  { name:"광주공항", lat:35.1264, lng:126.8089 },
+  { name:"무안공항", lat:34.9914, lng:126.3828 },
+  { name:"김해공항", lat:35.1795, lng:128.9382 },
+  { name:"대구공항", lat:35.8940, lng:128.6586 },
+  { name:"제주공항", lat:33.5104, lng:126.4914 },
+];
+const nearestAirport = (p) =>
+  AIRPORTS.reduce((a, b) => metres(p, b) < metres(p, a) ? b : a, AIRPORTS[0]);
+
+/* 섬이라 길이 없는 곳 */
+const isIsland = (p) => p.lat < 33.65 || (p.lat > 37.4 && p.lng > 130.7);
 let wmap = null, wline = null, wdot = null, lastGeoAt = -1e9;
 
 /* 전 세계 도시 검색 (Open-Meteo, 키 없음) */
@@ -1883,7 +1908,7 @@ function faceAvatar(pan){
 
 /* ── 네이버 거리뷰 ── */
 let pano = null, panoAt = -1e9;
-let groundM = 0, want = 0, pausedSec = 0, legNow = "";
+let groundM = 0, want = 0, pausedSec = 0, legNow = "", depName = "공항";
 const speedKmh = (d) => (isPlane() && d < groundM) ? 85 : mode.kmh;
 const flying = () => isPlane() && travelled >= groundM;   // 공항을 지났는가
 
@@ -2358,7 +2383,7 @@ function jumpInner(m){
       legNow = leg;
       setAvatar();
       if (leg === "air"){
-        if (groundM > 0) banner("인천공항", "이제 비행기를 탑니다");
+        if (groundM > 0) banner(depName, "이제 비행기를 탑니다");
 
       }
     }
