@@ -1,6 +1,6 @@
 {
-  "name": "공부 여행",
-  "short_name": "공부 여행",
+  "name": "창밖 여행",
+  "short_name": "창밖 여행",
   "start_url": "./index.html",
   "display": "fullscreen",
   "orientation": "portrait",
