@@ -231,6 +231,16 @@ const NAVER_KEY = "";
   #eta.near span{color:#FFB27A;font-weight:600;animation:blink 1.6s ease-in-out infinite}
   @keyframes blink{0%,100%{opacity:1}50%{opacity:.45}}
   #mini.big ~ #eta{top:auto;bottom:118px}
+  #arrive{position:absolute;inset:0;z-index:15;display:none;align-items:center;justify-content:center;
+    background:#050B0Ccc;backdrop-filter:blur(3px);padding:24px}
+  #arrive .box{width:100%;max-width:420px;background:#0C1719;border:1px solid var(--line);
+    border-radius:20px;padding:28px 24px;text-align:center;box-shadow:0 16px 40px #000b}
+  #arrive b{display:block;font-size:26px;color:var(--dawn)}
+  #arrive p{margin:12px 0 24px;font-size:17px;color:var(--paper)}
+  #arrive .btns{display:flex;flex-direction:column;gap:10px}
+  #arrive .btns button{height:52px;border-radius:12px;font-size:15px;font-family:inherit;border:0}
+  #arriveYes{background:var(--dawn);color:var(--ink);font-weight:700}
+  #arriveNo{background:none;border:1px solid var(--line);color:#8FA9A4}
   #banner{position:absolute;left:0;right:0;top:38%;z-index:9;text-align:center;pointer-events:none;opacity:0;
        transition:opacity .5s}
   #banner b{display:inline-block;background:#0C1719E6;border:1px solid var(--dawn);color:var(--dawn);
@@ -325,8 +335,8 @@ const NAVER_KEY = "";
   </section>
 
   <section class="step" data-step="4">
-    <h1>집중 시간은?</h1>
-    <p class="tiny">그동안 폰은 내려놓는 거야</p>
+    <h1>얼마나 앉아 있을까?</h1>
+    <p class="tiny" id="timeInfo">그동안 폰은 내려놓는 거야</p>
     <div class="chips" id="times"></div>
   </section>
 
@@ -377,6 +387,16 @@ const NAVER_KEY = "";
     <div id="clock" class="mono">00:00</div>
   </div>
   <button id="jump"><span>⏭</span><b></b></button>
+  <div id="arrive">
+    <div class="box">
+      <b id="arriveName"></b>
+      <p id="arriveSub">여기 구경할래?</p>
+      <div class="btns">
+        <button id="arriveYes">좋아, 둘러보자</button>
+        <button id="arriveNo">오늘은 여기까지</button>
+      </div>
+    </div>
+  </div>
   <div id="banner"><b></b><em></em></div>
   <div id="place"></div>
   <div id="quote"></div>
@@ -447,7 +467,6 @@ function chips(sel, list, get, set){
 }
 chips("#modes", MODES.filter(m => m.id !== "plane" && m.id !== "boat").map(m=>({label:`${m.name} ${m.kmh}km/h`, value:m})),
       ()=>mode, v=>{ mode = v; check(); });
-chips("#times", TIMES.map(t=>({label:t+"분", value:t})), ()=>minutes, v=>minutes=v);
 const VIEWS = [{label:"지도",value:"map"},{label:"그림 풍경",value:"draw"}];
 if (NAVER_KEY) VIEWS.splice(1, 0, {label:"거리뷰",value:"road"});
 chips("#views", VIEWS, ()=>viewMode, v=>viewMode=v);
@@ -517,7 +536,7 @@ function init(){
       loopMode = true; touring = false;
       from = { ...homeFrom };
       to = { name: "우리 집", lat: homeFrom.lat, lng: homeFrom.lng };
-      mode = MODES.find(m => m.id === "walk");
+      mode = MODES.find(m => m.id === "walk"); loopKm = 3;
       await check();
       showStep(3);
       return;
@@ -549,6 +568,61 @@ function init(){
   }
 
   /* ── 어떻게 갈까 ── */
+  function renderTimes(){
+    const box = $("#times"); box.innerHTML = "";
+    const dest = loopMode ? "한 바퀴" : (to ? to.name : "도착지");
+    const info = $("#timeInfo");
+
+    const mk = (mins, rt, sub, reach) => {
+      const b = document.createElement("button");
+      b.className = "chip";
+      b.innerHTML = `${fmtMin(mins)}<br><small style="opacity:.65">${sub}</small>`;
+      b.setAttribute("aria-pressed", minutes === mins && rate === rt);
+      b.onclick = () => {
+        minutes = mins; rate = rt; rateTouched = true;
+        renderTimes(); refresh();
+        setTimeout(() => showStep(5), 240);
+      };
+      box.appendChild(b);
+    };
+
+    if (totalM){
+      const base = tripSeconds(1);                    // 실시간으로 걸리는 초
+      let any = false;
+      RATES.filter(r => r.v < 60).forEach(r => {
+        const mins = Math.round(base / r.v / 60 / 5) * 5;
+        if (mins < 15 || mins > 180) return;
+        any = true;
+        mk(mins, r.v, r.v === 1 ? `${dest}까지 · 실제 속도` : `${dest}까지 · ${r.v}배속`);
+      });
+      if (info) info.textContent = any
+        ? `${dest}까지 한 번에 가려면 이만큼 앉으면 돼`
+        : `오늘은 갈 수 있는 만큼만 가자`;
+      if (any){
+        const hr = document.createElement("p");
+        hr.className = "tiny";
+        hr.style.cssText = "width:100%;margin:14px 0 2px";
+        hr.textContent = "짧게만 할래";
+        box.appendChild(hr);
+      }
+    } else if (info) info.textContent = "";
+
+    [25, 60].forEach(t => {
+      const b = document.createElement("button");
+      b.className = "chip";
+      b.innerHTML = `${t}분<br><small style="opacity:.65">간 만큼만</small>`;
+      b.setAttribute("aria-pressed", minutes === t && !rateTouched);
+      b.onclick = () => {
+        minutes = t; rateTouched = false;
+        renderTimes(); refresh();
+        setTimeout(() => showStep(5), 240);
+      };
+      box.appendChild(b);
+    });
+  }
+  const fmtMin = (m) => m < 60 ? m + "분"
+    : (m % 60 ? Math.floor(m/60) + "시간 " + (m%60) + "분" : Math.floor(m/60) + "시간");
+
   function renderLoop(){
     const w = $("#loopWrap");
     w.style.display = loopMode ? "block" : "none";
@@ -576,7 +650,9 @@ function init(){
       b.className = "chip"; b.innerHTML = `${m.name}<br><small style="opacity:.6">${m.kmh}km/h</small>`;
       b.setAttribute("aria-pressed", mode.id === m.id);
       b.onclick = async () => {
-        mode = m; await check(); renderModes();
+        mode = m;
+        if (loopMode) loopKm = (m.id === "walk") ? 3 : (m.id === "run") ? 5 : 10;
+        await check(); renderModes();
         if (!loopMode) setTimeout(() => showStep(4), 220);
       };
       box.appendChild(b);
@@ -611,6 +687,7 @@ function init(){
     if (step === 2 && loopMode){ showStep(3); return; }
     if (step === 2) renderStart();
     if (step === 3) renderModes();
+    if (step === 4) renderTimes();
     if (step === STEPS){
       const mm = $("#mm"); if (mm) mm.textContent = minutes;
     }
@@ -660,7 +737,7 @@ function init(){
   };
 
   /* 고르면 저절로 다음으로 */
-  ["#times"].forEach(sel => {
+  [].forEach(sel => {
     $(sel).addEventListener("click", (e) => {
       if (e.target.tagName === "BUTTON") setTimeout(() => showStep(step + 1), 260);
     });
@@ -1206,6 +1283,7 @@ function paintTour(){
 /* ═══════════ 날씨 · 사건 · 기록 ═══════════ */
 let weather = { kind:"clear", temp:null, at:0 };
 let evTimer = null, seenSigun = [], sessRest = 0, sessTunnel = 0, sessStart = 0, arrivedShown = false;
+let waitStart = 0, askedTour = false;
 
 const WKIND = (c) => {
   if (c === 0 || c === 1) return "clear";
@@ -1338,7 +1416,7 @@ function renderStamps(){
 function nextStop(){
   const list = [];
   if (groundM > 1000) list.push({ m:groundM, name:depName });
-  pois.filter(p => p.kind === "rest" && p.m < travelEndM - 500)
+  pois.filter(p => (p.kind === "rest" || p.kind === "gate") && p.m < travelEndM - 300)
       .forEach(p => list.push({ m:p.m, name:p.name }));
   if (travelEndM > 1000) list.push({ m:travelEndM, name:(to ? to.name : "도착지") });
   spots.forEach(sp => list.push({ m:sp.m, name:sp.name }));
@@ -1695,8 +1773,15 @@ async function loadRoute(){
         push(await roadPath(from, dep), 85, "car");
         groundM = legs.reduce((a,l) => a + l.len, 0);
       }
-      push(flightPath(isBoat() ? dep : { lat:dep.lat, lng:dep.lng }, to),
+      const arr = isBoat() ? null : arrivalAirport(to);
+      const land = (arr && metres(arr, to) > 5000) ? arr : to;
+      push(flightPath(isBoat() ? dep : { lat:dep.lat, lng:dep.lng }, land),
            isBoat() ? 45 : 850, isBoat() ? "boat" : "plane");
+      arrName = (land === to) ? "" : land.name;
+      if (land !== to){
+        const road2 = await roadPath(land, to);
+        push(road2 || greatCircle(land, to, 30), 60, "car");   // 공항에서 시내까지
+      }
     } else {
       const road = await roadPath(from, to);
       push(road || greatCircle(from, to, 80), mode.kmh, mode.id);
@@ -1796,7 +1881,23 @@ function loadPois(){
       }));
     });
   });
-  return Promise.all(jobs).then(() => {
+  /* 도시를 나가고 들어가는 톨게이트 */
+  [[0.06, "out"], [0.94, "in"]].forEach(pair => {
+    const g = at(end * pair[0]), side = pair[1];
+    ["톨게이트", "요금소", "IC"].forEach(kw => {
+      jobs.push(new Promise(res => {
+        ps.keywordSearch(kw, (d, st) => {
+          if (st === kakao.maps.services.Status.OK)
+            d.slice(0,3).forEach(x => pois.push({ name:x.place_name, lat:+x.y, lng:+x.x,
+                                                  kind:"gate", side:side }));
+          res();
+        }, { location:new kakao.maps.LatLng(g.lat, g.lng), radius:20000,
+             sort:kakao.maps.services.SortBy.DISTANCE });
+      }));
+    });
+  });
+
+  return Promise.all(jobs).then(() => new Promise(done => {
     // 각 POI를 경로상의 거리로 환산하고, 경로에서 1.2km 넘게 떨어진 것은 버린다
     pois = pois.map(p => {
       let best = 1e9, bestM = 0;
@@ -1807,8 +1908,39 @@ function loadPois(){
       return { ...p, off:best, m:bestM };
     }).filter(p => p.off < 1600 && p.m > 3000 && p.m < (travelEndM || totalM) - 3000)
       .sort((a,b) => a.m - b.m)
-      .filter((p,i,arr) => i === 0 || p.m - arr[i-1].m > 12000);
-  });
+      .filter((p,i,arr) => i === 0 || p.kind === "gate" || p.m - arr[i-1].m > 12000);
+
+    /* 나가는 톨게이트 하나, 들어가는 톨게이트 하나 */
+    const lim = (travelEndM || totalM);
+    const outs = pois.filter(p => p.kind === "gate" && p.side === "out").sort((a,b) => a.m - b.m);
+    const ins  = pois.filter(p => p.kind === "gate" && p.side === "in").sort((a,b) => b.m - a.m);
+    pois = pois.filter(p => p.kind !== "gate");
+    if (outs[0] && outs[0].m > 500) pois.push(outs[0]);
+    if (ins[0] && ins[0].m < lim - 500 && (!outs[0] || ins[0].m - outs[0].m > 5000)) pois.push(ins[0]);
+    pois.sort((a,b) => a.m - b.m);
+
+    /* 쉬어갈 곳이 적으면 구간을 나눠 지명을 붙인다 */
+    const end = travelEndM || totalM;
+    const rests = pois.filter(x => x.kind === "rest");
+    if (rests.length >= 4 || end < 40000){ done(); return; }
+    const need = [];
+    for (let f = 1; f <= 5; f++){
+      const m = end * (f / 6);
+      if (rests.some(r => Math.abs(r.m - m) < 15000)) continue;
+      need.push(m);
+    }
+    let left = need.length;
+    if (!left){ done(); return; }
+    need.forEach(m => {
+      const q = at(m);
+      geo.coord2RegionCode(q.lng, q.lat, (res, st) => {
+        const nm = (st === kakao.maps.services.Status.OK && res[0])
+          ? (res[0].region_2depth_name || res[0].region_1depth_name) : "중간 지점";
+        pois.push({ name: nm, kind: "rest", m: m, off: 0, lat:q.lat, lng:q.lng });
+        if (--left <= 0){ pois.sort((a,b) => a.m - b.m); done(); }
+      });
+    });
+  }));
 }
 
 /* 이동 수단에 맞춘 지도 축척 — 느릴수록 가까이 */
@@ -1842,7 +1974,16 @@ function buildMap(){
     viewMode = ring[(ring.indexOf(viewMode) + 1) % ring.length];
     applyView();
   };
-    $("#jump").onclick = () => {
+    $("#arriveYes").onclick = () => {
+    $("#arrive").style.display = "none";
+    if (waitStart){ pausedSec += (Date.now() - waitStart) / 1000 * rate; waitStart = 0; }
+  };
+  $("#arriveNo").onclick = () => {
+    $("#arrive").style.display = "none";
+    waitStart = 0;
+    end(true);
+  };
+  $("#jump").onclick = () => {
     const t = nextStop();
     if (!t){ banner("더 갈 곳이 없어", ""); return; }
     startM += (t.m - want);
@@ -1886,6 +2027,15 @@ function buildMap(){
   $("#mini").onclick = () => {
     $("#mini").classList.toggle("big");
     setTimeout(() => { mini.relayout(); fitMini(); }, 300);
+  };
+  $("#arriveYes").onclick = () => {
+    $("#arrive").style.display = "none";
+    if (waitStart){ pausedSec += (Date.now() - waitStart) / 1000 * rate; waitStart = 0; }
+  };
+  $("#arriveNo").onclick = () => {
+    $("#arrive").style.display = "none";
+    waitStart = 0;
+    end(true);
   };
   $("#jump").onclick = () => {
     const t = nextStop();
@@ -1970,6 +2120,34 @@ const nearestPort = (p) =>
 
 /* 배로만 갈 수 있는 섬 (울릉도·독도) */
 const needsBoat = (p) => p.lat > 37.2 && p.lng > 130.5;
+
+/* 해외 주요 공항 — 도착도 공항부터 시작합니다 */
+const WORLD_AIRPORTS = [
+  { name:"샤를드골공항",   lat:49.0097, lng:2.5479 },
+  { name:"히스로공항",     lat:51.4700, lng:-0.4543 },
+  { name:"JFK공항",       lat:40.6413, lng:-73.7781 },
+  { name:"라스베가스공항", lat:36.0840, lng:-115.1537 },
+  { name:"피우미치노공항", lat:41.8003, lng:12.2389 },
+  { name:"나리타공항",     lat:35.7720, lng:140.3929 },
+  { name:"간사이공항",     lat:34.4342, lng:135.2328 },
+  { name:"수완나품공항",   lat:13.6900, lng:100.7501 },
+  { name:"창이공항",       lat:1.3644,  lng:103.9915 },
+  { name:"시드니공항",     lat:-33.9399, lng:151.1753 },
+  { name:"호놀룰루공항",   lat:21.3187, lng:-157.9225 },
+  { name:"카이로공항",     lat:30.1219, lng:31.4056 },
+  { name:"이스탄불공항",   lat:41.2753, lng:28.7519 },
+  { name:"장가계공항",     lat:29.1028, lng:110.4433 },
+  { name:"산토리니공항",   lat:36.3992, lng:25.4793 },
+  { name:"취리히공항",     lat:47.4647, lng:8.5492 },
+  { name:"홍콩공항",       lat:22.3080, lng:113.9185 },
+  { name:"타이베이공항",   lat:25.0777, lng:121.2328 },
+];
+function arrivalAirport(p){
+  if (inKorea(p)) return nearestAirport(p);
+  let best = null, bd = 1e9;
+  WORLD_AIRPORTS.forEach(a => { const d = metres(p, a); if (d < bd){ bd = d; best = a; } });
+  return (best && bd < 120000) ? best : null;
+}
 
 /* 섬이라 길이 없는 곳 */
 const isIsland = (p) => p.lat < 33.65 || needsBoat(p);
@@ -2345,8 +2523,8 @@ function faceAvatar(pan){
 /* ── 네이버 거리뷰 ── */
 let pano = null, panoAt = -1e9;
 let groundM = 0, want = 0, pausedSec = 0, legNow = "", depName = "공항", startM = 0;
-let legs = [], spots = [], travelEndM = 0, skipTouched = false, loopMode = false, loopKm = 10;
-let homeFrom = null, tripCity = null, touring = false;
+let legs = [], spots = [], travelEndM = 0, skipTouched = false, loopMode = false, loopKm = 3;
+let homeFrom = null, tripCity = null, touring = false, arrName = "";
 
 function loadHome(){
   try {
@@ -2804,7 +2982,7 @@ function applyView(){
 /* ───────── 주행 ───────── */
 function run(){
   startTs = Date.now();
-  want = startM; pausedSec = 0; legNow = "";
+  want = startM; pausedSec = 0; legNow = ""; waitStart = 0; askedTour = (startM >= travelEndM);
   sessStart = travelled; sessRest = 0; sessTunnel = 0; seenSigun = []; arrivedShown = false;
   startEvents();
   startQuotes();
@@ -2835,8 +3013,20 @@ function tick(){
     else jb.style.display = "none";
   }
 
+  if (waitStart) return;                            // 도착해서 물어보는 중
   if (Date.now() < pausedUntil) return;              // 정차 중
   want = Math.min(totalM, startM + distAt(elapsed - pausedSec));
+
+  /* 목적지에 닿으면 구경할지 물어본다 */
+  if (!askedTour && travelEndM > 1000 && want >= travelEndM - 60 && spots.length){
+    askedTour = true;
+    waitStart = Date.now();
+    $("#arriveName").textContent = (to ? to.name : "도착지") + " 도착!";
+    $("#arriveSub").textContent = "여기 구경할래?";
+    $("#arrive").style.display = "flex";
+    try { navigator.vibrate?.([200,90,200]); } catch(e){}
+    return;
+  }
   if (want - travelled >= STEP_M || (want >= totalM && travelled < totalM)) jump(want);
 
   if (want >= totalM && !arrivedShown){
@@ -2930,7 +3120,7 @@ function jumpInner(m){
     ? (left < 1 ? "도착합니다" : `곧 도착 · ${left.toFixed(1)}km`)
     : `${to.name} ${left.toFixed(0)}km · ${mins < 60 ? mins + "분" : Math.floor(mins/60) + "시간 " + (mins%60) + "분"}`;
 
-  const tag = nx ? ({rest:"휴게소", tunnel:"터널", bridge:"다리", spot:""})[nx.kind] : "";
+  const tag = nx ? ({rest:"휴게소", tunnel:"터널", bridge:"다리", gate:"톨게이트", spot:""})[nx.kind] : "";
   $("#next").textContent = nx ? `다음 ${tag} · ${nx.name}` : `${to.name}까지`;
   $("#left").textContent = ((nx ? nx.m - m : totalM - m) / 1000).toFixed(1) + " km";
 
@@ -2949,6 +3139,9 @@ function jumpInner(m){
       const q = $("#tunnel .tname"); if (q) q.textContent = hit.name;
       tunnelUntil = Date.now() + 14000 / rate;
       sessTunnel++;
+    } else if (hit.kind === "gate"){
+      banner(hit.name, hit.side === "out" ? "이제 출발합니다"
+                                          : (to ? to.name : "도착지") + " 에 들어왔습니다");
     } else if (hit.kind === "bridge"){
       banner(hit.name, "다리를 건넙니다");
       bridgeUntil = Date.now() + 9000 / rate;
@@ -2983,6 +3176,7 @@ function end(ok){
   finished = true;
   clearInterval(timer);
   sceneOn = false; tunnelUntil = 0; bridgeUntil = 0;
+  waitStart = 0; $("#arrive").style.display = "none";
   if (satRaf){ cancelAnimationFrame(satRaf); satRaf = null; }
   stopMusic();
   if (evTimer) clearTimeout(evTimer);
