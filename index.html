@@ -1313,9 +1313,11 @@ function renderStamps(){
 function nextStop(){
   const list = [];
   if (groundM > 1000) list.push({ m:groundM, name:depName });
+  pois.filter(p => p.kind === "rest" && p.m < travelEndM - 500)
+      .forEach(p => list.push({ m:p.m, name:p.name }));
   if (travelEndM > 1000) list.push({ m:travelEndM, name:(to ? to.name : "도착지") });
   spots.forEach(sp => list.push({ m:sp.m, name:sp.name }));
-  return list.sort((a,b) => a.m - b.m).find(x => x.m > want + 200) || null;
+  return list.sort((a,b) => a.m - b.m).find(x => x.m > want + 300) || null;
 }
 
 /* ── 명소에 닿으면 사진을 크게 ── */
@@ -1700,10 +1702,11 @@ function finishRoute(){
 
 /* 경로를 5등분한 지점 주변에서 휴게소·명소를 모아 둔다 */
 function loadPois(){
-  if (isPlane()) return Promise.resolve();
-  const spots = [0.12, 0.3, 0.48, 0.66, 0.84].map(f => at(totalM * f));
+  if (travelEndM < 30000) return Promise.resolve();
+  const end = travelEndM || totalM;
+  const pts = [0.15, 0.35, 0.55, 0.75, 0.92].map(f => at(end * f));
   const jobs = [];
-  spots.forEach(p => {
+  pts.forEach(p => {
     [["휴게소","rest"],["터널","tunnel"],["대교","bridge"],["관광명소","spot"]].forEach(pair => {
       const kw = pair[0], kind = pair[1];
       jobs.push(new Promise(res => {
@@ -1724,9 +1727,9 @@ function loadPois(){
         if (d < best){ best = d; bestM = cum[i]; }
       }
       return { ...p, off:best, m:bestM };
-    }).filter(p => p.off < (p.kind === "spot" ? 900 : 1600) && p.m > 1500 && p.m < totalM - 1500)
+    }).filter(p => p.off < 1600 && p.m > 3000 && p.m < (travelEndM || totalM) - 3000)
       .sort((a,b) => a.m - b.m)
-      .filter((p,i,arr) => i === 0 || p.m - arr[i-1].m > 4000);
+      .filter((p,i,arr) => i === 0 || p.m - arr[i-1].m > 12000);
   });
 }
 
@@ -2029,7 +2032,7 @@ function drawChevrons(){
 /* 카카오 축척 — 숫자가 작을수록 가깝습니다 */
 function satLevel(){
   const k = legs.length ? legAt(travelled) : mode.id;
-  const base = k === "plane" || k === "boat" ? 13 : k === "walk" || k === "run" ? 2 : 4;
+  const base = (k === "plane" || k === "boat") ? 13 : (k === "walk" || k === "run") ? 1 : 4;
   return Math.max(1, Math.min(14, base - satAdj));
 }
 
@@ -2327,7 +2330,7 @@ let satRaf = null;
 let satAdj = parseInt(get("ride:zoom", "0"), 10) || 0;   // 조절값을 기억한다
 function satZoom(){
   const k = legs.length ? legAt(travelled) : mode.id;
-  const base = (k === "plane" || k === "boat") ? 5 : (k === "walk" || k === "run") ? 16 : 13;
+  const base = (k === "plane" || k === "boat") ? 5 : (k === "walk" || k === "run") ? 17 : 13;
   return Math.max(2, Math.min(18, base + satAdj));
 }
 function satFrame(){
