@@ -318,6 +318,10 @@ const NAVER_KEY = "";
     <h1>어떻게 갈까?</h1>
     <p class="tiny" id="modeInfo"></p>
     <div class="chips" id="modes"></div>
+    <div id="loopWrap" style="display:none">
+      <p class="tiny" style="margin-top:22px">얼마나 돌까?</p>
+      <div class="chips" id="loopKms"></div>
+    </div>
   </section>
 
   <section class="step" data-step="4">
@@ -404,8 +408,8 @@ const NAVER_KEY = "";
 <script>
 /* ───────── 상수 ───────── */
 const MODES = [
-  {id:"walk", name:"걷기",   kmh:10},
-  {id:"run",  name:"뛰기",   kmh:15},
+  {id:"walk", name:"걷기",   kmh:4},
+  {id:"run",  name:"뛰기",   kmh:11},
   {id:"bike", name:"오토바이", kmh:60},
   {id:"car",  name:"자동차", kmh:85},
   {id:"boat", name:"배",     kmh:45},
@@ -462,7 +466,7 @@ function init(){
   ps = new kakao.maps.services.Places();
   geo = new kakao.maps.services.Geocoder();
   bindSearch("#qFrom", "#sFrom", (p)=>{ saveHome(p); check(); }, "from");
-  bindSearch("#qTo",   "#sTo",   async (p)=>{ to = p; touring = false; skipTouched = false; startM = 0; if (window.resetHome) window.resetHome(); if (window.closeTrips) window.closeTrips(); await check(); if (window.showStep) window.showStep(2); }, "to");
+  bindSearch("#qTo",   "#sTo",   async (p)=>{ to = p; touring = false; loopMode = false; skipTouched = false; startM = 0; if (window.resetHome) window.resetHome(); if (window.closeTrips) window.closeTrips(); await check(); if (window.showStep) window.showStep(2); }, "to");
   function useHere(){
     const b = $("#here");
     if (!navigator.geolocation){ b.textContent = "이 기기는 위치를 못 찾습니다"; return; }
@@ -510,13 +514,15 @@ function init(){
     if (k.id === "local"){
       $("#pickWrap").style.display = "none";
       if (!homeFrom){ $("#warn").textContent = "먼저 집 위치를 정해줘"; showStep(2); return; }
+      loopMode = true; touring = false;
       from = { ...homeFrom };
-      to = { name: "우리 동네", lat: homeFrom.lat, lng: homeFrom.lng };
-      touring = true;
+      to = { name: "우리 집", lat: homeFrom.lat, lng: homeFrom.lng };
+      mode = MODES.find(m => m.id === "walk");
       await check();
-      showStep(2);
+      showStep(3);
       return;
     }
+    loopMode = false;
     $("#pickWrap").style.display = "block";
     $("#qTo").value = ""; $("#sTo").innerHTML = "";
     to = null;
@@ -543,7 +549,22 @@ function init(){
   }
 
   /* ── 어떻게 갈까 ── */
+  function renderLoop(){
+    const w = $("#loopWrap");
+    w.style.display = loopMode ? "block" : "none";
+    if (!loopMode) return;
+    const box = $("#loopKms"); box.innerHTML = "";
+    [3, 5, 10, 20].forEach(k => {
+      const b = document.createElement("button");
+      b.className = "chip"; b.textContent = k + "km";
+      b.setAttribute("aria-pressed", loopKm === k);
+      b.onclick = async () => { loopKm = k; await check(); renderLoop(); };
+      box.appendChild(b);
+    });
+  }
+
   function renderModes(){
+    renderLoop();
     const box = $("#modes"); box.innerHTML = "";
     const flightPart = travelEndM > 0 && groundM > 0 && startM < groundM;
     let list;
@@ -554,7 +575,10 @@ function init(){
       const b = document.createElement("button");
       b.className = "chip"; b.innerHTML = `${m.name}<br><small style="opacity:.6">${m.kmh}km/h</small>`;
       b.setAttribute("aria-pressed", mode.id === m.id);
-      b.onclick = async () => { mode = m; await check(); renderModes(); setTimeout(() => showStep(4), 220); };
+      b.onclick = async () => {
+        mode = m; await check(); renderModes();
+        if (!loopMode) setTimeout(() => showStep(4), 220);
+      };
       box.appendChild(b);
     });
     $("#modeInfo").textContent =
@@ -584,6 +608,7 @@ function init(){
     $("#warn").textContent = "";
     $("#setup").classList.toggle("mid", step < STEPS);
     if (step >= 4) refresh();
+    if (step === 2 && loopMode){ showStep(3); return; }
     if (step === 2) renderStart();
     if (step === 3) renderModes();
     if (step === STEPS){
@@ -656,7 +681,7 @@ function init(){
       tl.querySelectorAll("button").forEach(x => x.disabled = true);
       b.innerHTML = `${t.n}<small>둘러볼 곳 찾는 중…</small>`;
 
-      touring = false; skipTouched = false;
+      touring = false; loopMode = false; skipTouched = false;
       if (window.resetHome) window.resetHome();
       to = { name: t.n, lat: t.lat, lng: t.lng };
       $("#qTo").value = t.n;
@@ -891,7 +916,7 @@ function refresh(){
   const hrs  = km / eff;
   const time = hrs >= 1 ? `${Math.floor(hrs)}시간 ${Math.round((hrs%1)*60)}분` : `${Math.round(hrs*60)}분`;
   renderRates();
-  const wayTxt = touring ? `${from.name} 둘러보기` : `${from.name} → ${to.name}`;
+  const wayTxt = loopMode ? "동네 한 바퀴" : touring ? `${from.name} 둘러보기` : `${from.name} → ${to.name}`;
   $("#plan").innerHTML =
     `<b>${esc(wayTxt)}</b><br>` +
     `${mode.name}로 <u>${km.toFixed(0)}km</u> · ` +
@@ -1634,6 +1659,32 @@ async function loadRoute(){
     legs.push({ len, kmh, kind });
   };
 
+  /* ── 동네 한 바퀴 ── */
+  if (loopMode){
+    const loop = await loopPath(from, loopKm);
+    push(loop, mode.kmh, mode.id);
+    travelEndM = 0;
+    path = [].concat(...seg);
+    finishRoute();
+    /* 코스 근처 명소를 지날 때 사진이 뜨도록 */
+    try {
+      const near = await Promise.race([
+        landmarks(from.lat, from.lng),
+        new Promise(r => setTimeout(() => r([]), 6000)),
+      ]);
+      near.filter(x => x.lat && x.lng).slice(0, 8).forEach(x => {
+        let best = 1e9, bestM = 0;
+        for (let i = 0; i < path.length; i += 2){
+          const d = metres(x, path[i]);
+          if (d < best){ best = d; bestM = cum[i]; }
+        }
+        if (best < 900) spots.push({ name:x.title, desc:x.desc, img:x.img, m:bestM });
+      });
+      spots.sort((a,b) => a.m - b.m);
+    } catch(e){}
+    return;
+  }
+
   /* ── ① 목적지까지 가는 길 ── */
   if (!touring){
     if (isPlane() || isBoat()){
@@ -1679,6 +1730,33 @@ async function loadRoute(){
   path = [].concat(...seg);
   finishRoute();
   if (!spots.length && to) spots.push({ name:to.name, desc:"", img:"", m: totalM });
+}
+
+/* 집을 중심으로 한 바퀴 도는 코스 (실제 도로) */
+async function loopPath(home, km){
+  const r = km / (2 * Math.PI);                       // 반지름(km)
+  const dLat = r / 111.2;
+  const dLng = r / (111.2 * Math.cos(home.lat * Math.PI / 180));
+  const wps = [];
+  for (let i = 0; i < 6; i++){
+    const a = (i / 6) * Math.PI * 2;
+    wps.push({ lat: home.lat + Math.sin(a) * dLat, lng: home.lng + Math.cos(a) * dLng });
+  }
+  const all = [home, ...wps, home];
+  try {
+    const coords = all.map(p => `${p.lng},${p.lat}`).join(";");
+    const u = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
+    const j = await (await fetch(u)).json();
+    if (j.routes && j.routes[0])
+      return j.routes[0].geometry.coordinates.map(c => ({ lng:c[0], lat:c[1] }));
+  } catch(e){}
+  /* 도로를 못 찾으면 동그란 길로라도 */
+  const out = [];
+  for (let i = 0; i <= 72; i++){
+    const a = (i / 72) * Math.PI * 2;
+    out.push({ lat: home.lat + Math.sin(a) * dLat, lng: home.lng + Math.cos(a) * dLng });
+  }
+  return out;
 }
 
 /* 도로 경로 한 구간 */
@@ -2032,7 +2110,7 @@ function drawChevrons(){
 /* 카카오 축척 — 숫자가 작을수록 가깝습니다 */
 function satLevel(){
   const k = legs.length ? legAt(travelled) : mode.id;
-  const base = (k === "plane" || k === "boat") ? 13 : (k === "walk" || k === "run") ? 1 : 4;
+  const base = (k === "plane" || k === "boat") ? 13 : (k === "walk" || k === "run") ? (loopMode ? 2 : 1) : (loopMode ? 3 : 4);
   return Math.max(1, Math.min(14, base - satAdj));
 }
 
@@ -2267,7 +2345,7 @@ function faceAvatar(pan){
 /* ── 네이버 거리뷰 ── */
 let pano = null, panoAt = -1e9;
 let groundM = 0, want = 0, pausedSec = 0, legNow = "", depName = "공항", startM = 0;
-let legs = [], spots = [], travelEndM = 0, skipTouched = false;
+let legs = [], spots = [], travelEndM = 0, skipTouched = false, loopMode = false, loopKm = 10;
 let homeFrom = null, tripCity = null, touring = false;
 
 function loadHome(){
