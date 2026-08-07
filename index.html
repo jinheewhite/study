@@ -15,18 +15,11 @@
 const KAKAO_JS_KEY = "d99f29b83599b2aa7c33cbe33a1662d5";  // developers.kakao.com > 내 애플리케이션 > 앱 키
 const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프록시
 
-/* 네이버 거리뷰를 쓰려면 네이버 클라우드에서 받은 키를 넣으세요.
-   비워두면 거리뷰 항목이 아예 나타나지 않습니다. */
-const NAVER_KEY = "";
 </script>
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=d99f29b83599b2aa7c33cbe33a1662d5&libraries=services&autoload=false" id="sdk"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script>
-  if (typeof NAVER_KEY !== "undefined" && NAVER_KEY){
-    document.write('<scr' + 'ipt src="https://openapi.map.naver.com/openapi/v3/maps.js?ncpKeyId='
-      + NAVER_KEY + '&submodules=panorama"></scr' + 'ipt>');
-  }
 </script>
 <style>
   :root{ --ink:#0C1719; --panel:#101F21; --line:#1E3F39; --dawn:#FFB27A; --mint:#7FD4C1; --paper:#E9EEE9; --dim:#5C7C76; }
@@ -477,8 +470,7 @@ function chips(sel, list, get, set){
 }
 chips("#modes", MODES.filter(m => m.id !== "plane" && m.id !== "boat").map(m=>({label:`${m.name} ${m.kmh}km/h`, value:m})),
       ()=>mode, v=>{ mode = v; check(); });
-const VIEWS = [{label:"지도",value:"map"},{label:"그림 풍경",value:"draw"}];
-if (NAVER_KEY) VIEWS.splice(1, 0, {label:"거리뷰",value:"road"});
+const VIEWS = [{label:"지도",value:"map"},{label:"거리뷰",value:"road"},{label:"그림 풍경",value:"draw"}];
 chips("#views", VIEWS, ()=>viewMode, v=>viewMode=v);
 chips("#musics", [{label:"켜기",value:true},{label:"끄기",value:false}], ()=>music, v=>music=v);
 
@@ -1372,6 +1364,15 @@ const EV = {
 
 function pickEvent(){
   const h = new Date().getHours();
+  const k = legs.length ? legAt(travelled) : mode.id;
+  if (k === "walk" || k === "run"){
+    const w = ["골목을 돌아 나왔습니다", "신호등 앞에서 잠깐 섰습니다",
+               "가게 앞 간판을 지나갑니다", "사람들 사이를 지나갑니다",
+               "발밑에서 보도블록 소리가 납니다", "바람이 얼굴에 닿습니다"];
+    if (h >= 20 || h < 6) w.push("가로등 불빛 아래를 지납니다");
+    if (EV[weather.kind]) w.push.apply(w, EV[weather.kind]);
+    return w[Math.floor(Math.random() * w.length)];
+  }
   if (flying()){                       // 하늘에 떠 있을 때만 하늘 이야기
     const sky = EV.sky.concat(EV.plane || []);
     return sky[Math.floor(Math.random() * sky.length)];
@@ -2044,7 +2045,7 @@ function buildMap(){
     buildWorldMap();
     $("#swap").style.display = "";
     $("#swap").onclick = () => {
-    const ring = (hasNaver() && !isPlane()) ? ["map","road","draw"] : ["map","draw"];
+    const ring = roadOK() ? ["map","road","draw"] : ["map","draw"];
     viewMode = ring[(ring.indexOf(viewMode) + 1) % ring.length];
     applyView();
   };
@@ -2100,7 +2101,7 @@ function buildMap(){
     zIndex:3, content:'<div class="pin me"></div>', xAnchor:0.5, yAnchor:0.5 });
   fitMini();
   $("#swap").onclick = () => {
-    const ring = (hasNaver() && !isPlane()) ? ["map","road","draw"] : ["map","draw"];
+    const ring = roadOK() ? ["map","road","draw"] : ["map","draw"];
     viewMode = ring[(ring.indexOf(viewMode) + 1) % ring.length];
     applyView();
   };
@@ -2606,65 +2607,27 @@ function faceAvatar(pan){
     : (pan > 180 ? "scaleX(-1)" : "scaleX(1)");
 }
 
-/* ── 네이버 거리뷰 ── */
-let pano = null, panoAt = -1e9;
-let groundM = 0, want = 0, pausedSec = 0, legNow = "", depName = "공항", startM = 0;
-let legs = [], spots = [], travelEndM = 0, skipTouched = false, loopMode = false, loopKm = 3;
-let homeFrom = null, tripCity = null, touring = false, arrName = "";
-
-function loadHome(){
-  try {
-    const v = get(KEY("home"), null);
-    if (v){ homeFrom = JSON.parse(v); from = { ...homeFrom }; }
-  } catch(e){}
-}
-function saveHome(h){
-  homeFrom = { name:h.name, lat:h.lat, lng:h.lng };
-  put(KEY("home"), JSON.stringify(homeFrom));
-  from = { ...homeFrom };
-  const fn = $("#fromNow"); if (fn) fn.textContent = homeFrom.name;
-}
-const speedKmh = (d) => ((isPlane() || isBoat()) && d < groundM) ? 85 : mode.kmh;
-const flying = () => (isPlane() || isBoat()) && travelled >= groundM;   // 공항·항구를 지났는가
-
-/* 출발 후 el 초가 지났을 때 가야 할 거리(m) */
-function distAt(el){
-  if (el <= 0) return 0;
-  if (!legs.length) return (mode.kmh * 1000 / 3600) * el;
-  let d = 0, t = 0;
-  for (const L of legs){
-    const v = L.kmh * 1000 / 3600;
-    const lt = L.len / v;
-    if (el <= t + lt) return d + (el - t) * v;
-    d += L.len; t += lt;
-  }
-  return totalM;
-}
-/* 지금 구간의 이동 수단 */
-function legAt(m){
-  let d = 0;
-  for (const L of legs){ d += L.len; if (m <= d) return L.kind; }
-  return legs.length ? legs[legs.length-1].kind : mode.id;
-}
-const hasNaver = () => !!(NAVER_KEY && window.naver && naver.maps && naver.maps.Panorama);
+/* ── 로드뷰 (국내만) ── */
+let rv = null, rvc = null, panoAt = -1e9, lastPano = null;
+const roadOK = () => { const q = at(want); return inKorea(q); };
 
 function buildRoad(){
-  if (pano || !hasNaver()) return;
-  pano = new naver.maps.Panorama($("#road"), {
-    position: new naver.maps.LatLng(from.lat, from.lng),
-    pov: { pan: 0, tilt: 0, fov: 100 },
-    aroundControl: false, zoomControl: false, flightSpot: false,
-  });
+  if (rv) return;
+  rv  = new kakao.maps.Roadview($("#road"));
+  rvc = new kakao.maps.RoadviewClient();
 }
 
 function roadStep(p){
-  if (!pano) return;
-  if (travelled - panoAt < 35) return;      // 35m 마다 한 걸음
+  if (!rv || !rvc) return;
+  if (Math.abs(travelled - panoAt) < 35) return;
   panoAt = travelled;
-  try {
-    pano.setPosition(new naver.maps.LatLng(p.lat, p.lng));
-    pano.setPov({ pan: p.pan || 0, tilt: 0, fov: 100 });
-  } catch(e){}
+  const pos = new kakao.maps.LatLng(p.lat, p.lng);
+  rvc.getNearestPanoId(pos, 90, (id) => {
+    if (!id || id === lastPano) return;
+    lastPano = id;
+    rv.setPanoId(id, pos);
+    setTimeout(() => { try { rv.setViewpoint({ pan:p.pan || 0, tilt:0, zoom:0 }); } catch(e){} }, 140);
+  });
 }
 
 /* 위성 화면은 매 프레임 위치를 따라갑니다 */
@@ -3041,17 +3004,17 @@ function sceneTick(){
 }
 
 function applyView(){
-  if (viewMode === "sat" || (viewMode === "road" && (!hasNaver() || isPlane()))) viewMode = "map";
+  if (viewMode === "sat" || (viewMode === "road" && !roadOK())) viewMode = "map";
   sceneOn = (viewMode === "draw");
   const satOn = (viewMode === "map");
   const roadOn = (viewMode === "road");
   $("#road").style.display = roadOn ? "block" : "none";
-  if (roadOn){ buildRoad(); panoAt = -1e9; }
+  if (roadOn){ buildRoad(); panoAt = -1e9; lastPano = null; }
   setAvatar();
   $("#scene").style.display = sceneOn ? "block" : "none";
   $("#sat").style.display   = satOn ? "block" : "none";
   $("#satzoom").style.display = (viewMode === "map") ? "flex" : "none";
-  $("#swap").textContent = viewMode === "map" ? "🖼" : "🗺";
+  $("#swap").textContent = viewMode === "map" ? (roadOK() ? "👀" : "🖼") : viewMode === "road" ? "🖼" : "🗺";
   if (satOn){
     buildSat();
     setTimeout(() => {
