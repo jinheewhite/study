@@ -197,7 +197,7 @@ const NAVER_KEY = "";
   #meta{display:flex;justify-content:space-between;font-size:13px;color:#CFE0DC;margin-bottom:12px;
        text-shadow:0 1px 4px #000}
   #ctrl{display:flex;gap:8px}
-  #ctrl button{height:44px;border-radius:10px;border:1px solid #ffffff33;background:#00000055;color:#DCE8E5;
+  #ctrl button{height:44px;padding:0 12px;border-radius:10px;border:1px solid #ffffff33;background:#00000055;color:#DCE8E5;
        font-size:13px;font-family:inherit;backdrop-filter:blur(6px)}
   #stop{flex:1;position:relative;overflow:hidden}
   #stop i{position:absolute;left:0;top:0;bottom:0;width:0;background:#ffffff2e;font-style:normal}
@@ -289,7 +289,7 @@ const NAVER_KEY = "";
     <div class="sug" id="sTo"></div>
     <button id="tripBtn">✈  유명한 곳에서 골라볼래</button>
     <div id="tripList"></div>
-    <p class="tiny" style="margin-top:20px"><b id="fromNow">우리 집</b><span id="fromLabel">에서 출발할게</span></p>
+    <p class="tiny" style="margin-top:20px" id="fromLine"><b id="fromNow">우리 집</b><span id="fromLabel">에서 출발할게</span></p>
     <button id="fromBtn">집 위치 정하기</button>
     <div id="fromWrap" style="display:none">
       <button id="here">📍  여기를 우리 집으로</button>
@@ -309,10 +309,7 @@ const NAVER_KEY = "";
     <p class="tiny">지금부터 <b id="mm">25</b>분, 폰은 내려놓자</p>
     <div id="plan"></div>
     <button class="go" id="start">출발</button>
-    <div id="skips">
-      <button id="skipAir2">✈  인천공항부터</button>
-      <button id="skipCity">🛬  오사카 도착부터</button>
-    </div>
+
     <p class="note" id="hint"></p>
     <div id="stamps"></div>
     <div id="album"></div>
@@ -361,6 +358,7 @@ const NAVER_KEY = "";
   <div id="bar">
     <div id="meta"><span id="next"></span><span id="left" class="mono"></span></div>
     <div id="ctrl">
+      <button id="jump">건너뛰기</button>
       <button id="msgbtn">문구 켬</button>
       <button id="tune">♪ 켬</button>
       <button id="swap">그림</button>
@@ -443,7 +441,7 @@ function init(){
   ps = new kakao.maps.services.Places();
   geo = new kakao.maps.services.Geocoder();
   bindSearch("#qFrom", "#sFrom", (p)=>{ saveHome(p); check(); }, "from");
-  bindSearch("#qTo",   "#sTo",   (p)=>{ to = p; touring = false; if (window.resetHome) window.resetHome(); check(); }, "to");
+  bindSearch("#qTo",   "#sTo",   (p)=>{ to = p; touring = false; skipTouched = false; if (window.resetHome) window.resetHome(); if (window.closeTrips) window.closeTrips(); check(); }, "to");
   function useHere(){
     const b = $("#here");
     if (!navigator.geolocation){ b.textContent = "이 기기는 위치를 못 찾습니다"; return; }
@@ -489,11 +487,6 @@ function init(){
     if (step >= 2) refresh();
     if (step === STEPS){
       const mm = $("#mm"); if (mm) mm.textContent = minutes;
-      const sa = $("#skipAir2"), sc = $("#skipCity"), sk = $("#skips");
-      if (sk) sk.style.display = travelEndM > 20000 ? "flex" : "none";
-      if (sa) sa.style.display = groundM > 1000 ? "" : "none";
-      if (sa) sa.textContent = "✈  " + depName + "부터";
-      if (sc) sc.textContent = "🛬  " + ((touring ? from.name : to.name)) + " 도착부터";
     }
     window.scrollTo(0, 0);
   }
@@ -553,18 +546,12 @@ function init(){
       tl.querySelectorAll("button").forEach(x => x.disabled = true);
       b.innerHTML = `${t.n}<small>둘러볼 곳 찾는 중…</small>`;
 
-      /* 목록에서 고른 곳은 언제나 "그곳을 둘러보기" */
-      touring = true;
-      tripCity = { name: t.n, lat: t.lat, lng: t.lng };
-      const spot = await pickSpotNear(tripCity);
-      from = { name: t.n, lat: t.lat, lng: t.lng };
-      to = spot || { name: t.n + " 한 바퀴", lat: t.lat + 0.011, lng: t.lng + 0.011 };
-      mode = MODES.find(m => m.id === "walk");
-      $("#qFrom").value = from.name;
-      $("#qTo").value = to.name;
+      touring = false; skipTouched = false;
+      if (window.resetHome) window.resetHome();
+      to = { name: t.n, lat: t.lat, lng: t.lng };
+      $("#qTo").value = t.n;
       $("#sTo").innerHTML = "";
-      const fn = $("#fromNow"); if (fn) fn.textContent = from.name;
-
+      if (window.closeTrips) window.closeTrips();
       tl.querySelectorAll("button").forEach(x => x.disabled = false);
       b.innerHTML = `${t.n}<small>${t.s}</small>`;
       await check();
@@ -579,27 +566,16 @@ function init(){
     $("#fromBtn").textContent = open ? "집 위치 정하기" : "닫기";
   };
   window.resetHome = () => { if (homeFrom) from = { ...homeFrom }; };
+  window.closeTrips = () => {
+    tl.style.display = "none";
+    $("#tripBtn").textContent = "✈  다른 곳으로 바꿀래";
+  };
   $("#tripBtn").onclick = () => {
     const open = tl.style.display === "grid";
     tl.style.display = open ? "none" : "grid";
-    $("#tripBtn").textContent = open ? "✈  아니, 오늘은 멀리 떠날래" : "✈  어디로 갈까?";
+    $("#tripBtn").textContent = open ? (to ? "✈  다른 곳으로 바꿀래" : "✈  유명한 곳에서 골라볼래") : "✈  어디로 갈까?";
   };
 
-  $("#skipAir2").onclick = () => {
-    if (!groundM){ $("#warn").textContent = "이 여정엔 공항 가는 길이 없어"; return; }
-    startM = groundM;
-    markSkip();
-  };
-  $("#skipCity").onclick = () => {
-    if (!travelEndM){ $("#warn").textContent = "이미 그곳에 있어"; return; }
-    startM = travelEndM;
-    markSkip();
-  };
-  function markSkip(){
-    $("#skipAir2").style.borderColor = startM === groundM && groundM ? "var(--dawn)" : "var(--line)";
-    $("#skipCity").style.borderColor = startM === travelEndM && travelEndM ? "var(--dawn)" : "var(--line)";
-    refresh();
-  }
 
   $("#flyBtn").onclick = async () => {
     if (!tripCity || !homeFrom){ $("#warn").textContent = "지금은 이미 타고 가는 중이야"; return; }
@@ -727,38 +703,25 @@ async function check(){
     return;
   }
 
-  /* 멀거나 · 해외거나 · 지금 위치를 모르면 → 그곳에 도착한 셈 치고 둘러본다 */
-  const far = !from || !inKorea(to) || metres(from, to) / 1000 > 900;
-  if (!touring && far){
-    touring = true;
-    tripCity = { name: to.name, lat: to.lat, lng: to.lng };
-    $("#plan").style.display = "block";
-    $("#plan").innerHTML = `${esc(to.name)}에서 둘러볼 곳을 찾는 중…`;
-    const spot = await pickSpotNear(tripCity);
-    from = { name: tripCity.name, lat: tripCity.lat, lng: tripCity.lng };
-    to = spot || {
-      name: tripCity.name + " 한 바퀴",
-      lat: tripCity.lat + 0.011, lng: tripCity.lng + 0.011
-    };
-    mode = MODES.find(m => m.id === "walk");
-    $("#qFrom").value = from.name;
-    $("#qTo").value = to.name;
-  }
+  /* 해외나 아주 먼 곳은 "그곳 도착부터" 를 기본으로 권한다 */
+  const farAway = !from || !inKorea(to) || metres(from, to) / 1000 > 900;
 
-  if (!from){ from = { name: to.name, lat: to.lat, lng: to.lng }; }
+  if (!from){ from = { name: to.name, lat: to.lat, lng: to.lng }; touring = true; }
 
   $("#start").disabled = false;
   autoMode();
   const fn = $("#fromNow");
   if (fn) fn.textContent = from.name;
   const fl = $("#fromLabel");
-  if (fl) fl.textContent = touring ? "에서 둘러볼게" : "에서 출발할게";
+  if (fl) fl.textContent = "에서 출발할게";
+  const fline = $("#fromLine");
+  if (fline) fline.style.display = (startM >= travelEndM && travelEndM > 0) ? "none" : "";
   $("#hint").textContent = `${from.name} → ${to.name}`;
   if (window.refreshNav) window.refreshNav();
 
   $("#plan").style.display = "block";
   $("#plan").innerHTML = "길을 찾는 중…";
-  path = []; cum = []; totalM = 0; startM = 0;
+  path = []; cum = []; totalM = 0; startM = 0; skipTouched = false;
   try {
     await loadRoute();
   } catch(e){
@@ -767,6 +730,7 @@ async function check(){
     try { finishRoute(); } catch(e2){}
   }
   if (!totalM){ path = greatCircle(from, to, 120); try { finishRoute(); } catch(e2){} }
+  if (!skipTouched) startM = (farAway && travelEndM > 20000) ? travelEndM : 0;
   refresh();
 }
 
@@ -1235,6 +1199,15 @@ function renderStamps(){
     + all.slice(-40).map(n => `<span>${n}</span>`).join("") + `</div>`;
 }
 
+/* 다음 이정표 — 공항 · 도착지 · 명소 */
+function nextStop(){
+  const list = [];
+  if (groundM > 1000) list.push({ m:groundM, name:depName });
+  if (travelEndM > 1000) list.push({ m:travelEndM, name:(to ? to.name : "도착지") });
+  spots.forEach(sp => list.push({ m:sp.m, name:sp.name }));
+  return list.sort((a,b) => a.m - b.m).find(x => x.m > want + 200) || null;
+}
+
 /* ── 명소에 닿으면 사진을 크게 ── */
 let spotTimer = null;
 function showSpot(sp){
@@ -1429,6 +1402,7 @@ function applyName(n){
   $("#intro").style.display = "none";
   $("#setup").style.display = "flex";
   $("#brand").textContent = NAME + "의 프로젝트";
+  const tb = $("#tripBtn"); if (tb) tb.textContent = "✈  유명한 곳에서 골라볼래";
   if (window.showStep) window.showStep(1);
   const q1 = $("#q1"); if (q1) q1.innerHTML = voc(NAME) + ",<br>오늘 어디 가고 싶어?";
   document.title = NAME + "의 프로젝트";
@@ -1677,7 +1651,15 @@ function buildMap(){
     viewMode = ring[(ring.indexOf(viewMode) + 1) % ring.length];
     applyView();
   };
-    $("#msgbtn").onclick = () => {
+    $("#jump").onclick = () => {
+    const t = nextStop();
+    if (!t){ banner("더 갈 곳이 없어", ""); return; }
+    startM += (t.m - want);
+    want = t.m;
+    jump(want);
+    banner(t.name + "까지 건너뛰었어", "");
+  };
+  $("#msgbtn").onclick = () => {
     quoteOn = !quoteOn;
     $("#msgbtn").textContent = quoteOn ? "문구 켬" : "문구 끔";
     if (!quoteOn) $("#quote").classList.remove("on");
@@ -1713,6 +1695,14 @@ function buildMap(){
   $("#mini").onclick = () => {
     $("#mini").classList.toggle("big");
     setTimeout(() => { mini.relayout(); fitMini(); }, 300);
+  };
+  $("#jump").onclick = () => {
+    const t = nextStop();
+    if (!t){ banner("더 갈 곳이 없어", ""); return; }
+    startM += (t.m - want);
+    want = t.m;
+    jump(want);
+    banner(t.name + "까지 건너뛰었어", "");
   };
   $("#msgbtn").onclick = () => {
     quoteOn = !quoteOn;
@@ -2164,7 +2154,7 @@ function faceAvatar(pan){
 /* ── 네이버 거리뷰 ── */
 let pano = null, panoAt = -1e9;
 let groundM = 0, want = 0, pausedSec = 0, legNow = "", depName = "공항", startM = 0;
-let legs = [], spots = [], travelEndM = 0;
+let legs = [], spots = [], travelEndM = 0, skipTouched = false;
 let homeFrom = null, tripCity = null, touring = false;
 
 function loadHome(){
@@ -2738,6 +2728,12 @@ function jumpInner(m){
     ? (left < 1 ? "도착합니다" : `곧 도착 · ${left.toFixed(1)}km`)
     : `${to.name} ${left.toFixed(0)}km · ${mins < 60 ? mins + "분" : Math.floor(mins/60) + "시간 " + (mins%60) + "분"}`;
 
+  const jb = $("#jump");
+  if (jb){
+    const t = nextStop();
+    jb.textContent = t ? "⏭ " + (t.name.length > 6 ? t.name.slice(0,6) + "…" : t.name) : "⏭";
+    jb.style.display = t ? "" : "none";
+  }
   const tag = nx ? ({rest:"휴게소", tunnel:"터널", bridge:"다리", spot:""})[nx.kind] : "";
   $("#next").textContent = nx ? `다음 ${tag} · ${nx.name}` : `${to.name}까지`;
   $("#left").textContent = ((nx ? nx.m - m : totalM - m) / 1000).toFixed(1) + " km";
