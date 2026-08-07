@@ -302,7 +302,7 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
 </div>
 
 <div class="wrap" id="setup" style="display:none">
-  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v12</span></p>
+  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v13</span></p>
   <div id="dots"></div>
 
   <section class="step" data-step="1">
@@ -1650,7 +1650,7 @@ function applyName(n){
   loadHome();
   $("#intro").style.display = "none";
   $("#setup").style.display = "flex";
-  $("#brand").innerHTML = '창밖 여행 <span id="ver">v12</span>';
+  $("#brand").innerHTML = '창밖 여행 <span id="ver">v13</span>';
   if (window.showStep) window.showStep(1);
   if (window.renderKinds) window.renderKinds();
   const q1 = $("#q1"); if (q1) q1.innerHTML = voc(NAME) + ",<br>오늘 어디 가고 싶어?";
@@ -2375,6 +2375,7 @@ let satRoute = null, satDone = null, wLastMove = 0;
 /* 국내는 카카오 스카이뷰 — 훨씬 선명합니다. 해외는 전 세계 위성 타일. */
 function buildSat(){
   if (satKakao || satLeaf) return;
+  const c0 = (path.length && cum.length) ? at(want || startM || 0) : from;
   const thinPts = path.filter((_, i) => i % Math.max(1, Math.ceil(path.length / 1200)) === 0);
 
   if (overseas() && typeof L !== "undefined"){
@@ -2386,13 +2387,13 @@ function buildSat(){
     L.polyline(thinPts.map(q => [q.lat, q.lng]), { color:"#0F7A38", weight:11, opacity:.45 }).addTo(satLeaf);
     leafRoute = L.polyline(thinPts.map(q => [q.lat, q.lng]), { color:"#25B24C", weight:7, opacity:.95 }).addTo(satLeaf);
     leafDone  = L.polyline([], { color:"#B9C0C6", weight:7, opacity:.95 }).addTo(satLeaf);
-    satLeaf.setView([from.lat, from.lng], satZoom());
+    satLeaf.setView([c0.lat, c0.lng], satZoom());
     [0, 150, 500].forEach(t => setTimeout(() => { try { satLeaf.invalidateSize(); } catch(e){} }, t));
     return;
   }
 
   satKakao = new kakao.maps.Map($("#sat"), {
-    center: new kakao.maps.LatLng(from.lat, from.lng),
+    center: new kakao.maps.LatLng(c0.lat, c0.lng),
     level: satLevel(), draggable:false, scrollwheel:false,
     disableDoubleClickZoom:true, keyboardShortcuts:false
   });
@@ -2404,7 +2405,9 @@ function buildSat(){
   satDone  = new kakao.maps.Polyline({ map:satKakao, path:[], strokeWeight:10,
                             strokeColor:"#B9C0C6", strokeOpacity:.95 });
   drawChevrons();
-  [0, 120, 400].forEach(t => setTimeout(() => { try { satKakao.relayout(); } catch(e){} }, t));
+  [0, 120, 400].forEach(t => setTimeout(() => {
+    try { satKakao.relayout(); satTick(); } catch(e){}
+  }, t));
 }
 
 /* 길 위에 진행 방향 화살표 */
