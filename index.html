@@ -328,7 +328,7 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
 </div>
 
 <div class="wrap" id="setup" style="display:none">
-  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v39</span></p>
+  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v41</span></p>
   <div id="dots"></div>
 
   <section class="step" data-step="1">
@@ -492,7 +492,12 @@ const gapOf = (key, lo, hi) => {
   return (v[0] * 1000) + Math.random() * ((v[1] - v[0]) * 1000);
 };
 const RATES = [{n:"실시간",v:1},{n:"2배",v:2},{n:"3배",v:3},{n:"5배",v:5},{n:"미리보기",v:60}];
-const STEP_M = 45;          // 로드뷰를 갱신할 거리 간격(m)
+const STEP_M = 45;          // (옛 값 · 아래 stepM() 을 씁니다)
+/* 위치를 얼마나 자주 갱신할지 — 느리게 갈수록 촘촘하게 */
+function stepM(){
+  const k = (typeof legs !== "undefined" && legs.length) ? legAt(travelled) : mode.id;
+  return (k === "walk") ? 6 : (k === "run") ? 10 : (k === "bike") ? 25 : 45;
+}
 const STOP_SEC = 12;        // 휴게소 정차 시간(초)
 
 let mode = MODES[3], minutes = 25, rate = 1, viewMode = "map", music = true, quoteOn = true;
@@ -715,7 +720,13 @@ function init(){
       b.innerHTML = `${t}분<br><small style="opacity:.65">${loopMode ? "이만큼만 걷기" : "간 만큼만"}</small>`;
       b.setAttribute("aria-pressed", minutes === t && !rateTouched);
       b.onclick = () => {
-        minutes = t; rateTouched = false;
+        minutes = t;
+        if (loopMode && totalM){                    // 그 시간에 한 바퀴가 딱 맞게
+          const base = tripSeconds(1);
+          const need = base / (t * 60);
+          rate = need <= 1 ? 1 : need <= 2 ? 2 : need <= 3 ? 3 : need <= 5 ? 5 : Math.ceil(need);
+          rateTouched = true;
+        } else rateTouched = false;
         renderTimes(); refresh();
         setTimeout(() => showStep(5), 240);
       };
@@ -1841,7 +1852,7 @@ function applyName(n){
   loadHome();
   $("#intro").style.display = "none";
   $("#setup").style.display = "flex";
-  $("#brand").innerHTML = '창밖 여행 <span id="ver">v39</span>';
+  $("#brand").innerHTML = '창밖 여행 <span id="ver">v41</span>';
   if (window.showStep) window.showStep(1);
   if (window.renderKinds) window.renderKinds();
   const q1 = $("#q1"); if (q1) q1.innerHTML = voc(NAME) + ",<br>오늘 어디 가고 싶어?";
@@ -2958,7 +2969,7 @@ function buildRoad(){
 function roadStep(p){
   if (!rv || !rvc) return;
   const k = legs.length ? legAt(travelled) : mode.id;
-  const step = (k === "walk") ? 12 : (k === "run") ? 20 : (k === "bike") ? 45 : 70;
+  const step = (k === "walk") ? 8 : (k === "run") ? 15 : (k === "bike") ? 40 : 70;
   if (Math.abs(travelled - panoAt) < step) return;
   panoAt = travelled;
   const pos = new kakao.maps.LatLng(p.lat, p.lng);
@@ -3422,7 +3433,7 @@ function tick(){
     try { navigator.vibrate?.([200,90,200]); } catch(e){}
     return;
   }
-  if (want - travelled >= STEP_M || (want >= totalM && travelled < totalM)) jump(want);
+  if (want - travelled >= stepM() || (want >= totalM && travelled < totalM)) jump(want);
 
   if (want >= totalM && !arrivedShown){
     arrivedShown = true;
@@ -3524,7 +3535,7 @@ function jumpInner(m){
   $("#left").textContent = ((nx ? nx.m - m : totalM - m) / 1000).toFixed(1) + " km";
 
   // 지나가는 지점 알림 / 휴게소 정차
-  const hit = pois.find(x => Math.abs(x.m - m) < STEP_M * 1.5 && !x.seen);
+  const hit = pois.find(x => Math.abs(x.m - m) < 70 && !x.seen);
   if (hit){
     hit.seen = true;
     eventName = hit.name;
