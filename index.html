@@ -117,9 +117,9 @@ const NAVER_KEY = "";
   #road{position:absolute;inset:0;display:none;background:#0B0E11;z-index:1}
   #sat:after{content:"";position:absolute;inset:0;pointer-events:none;
     background:radial-gradient(ellipse 44% 64% at 50% 46%, #0000 0 66%, #101418 74%, #0B0E11 100%)}
-  #satzoom{position:absolute;right:14px;top:46%;display:none;flex-direction:column;gap:8px;z-index:5}
-  #satzoom button{width:42px;height:42px;border-radius:12px;border:1px solid #ffffff44;
-    background:#00000055;color:#EAF2EF;font-size:19px;font-family:inherit;backdrop-filter:blur(6px)}
+  #satzoom{position:absolute;right:12px;top:44%;display:flex;flex-direction:column;gap:10px;z-index:5}
+  #satzoom button{width:52px;height:52px;border-radius:14px;border:1px solid #ffffff55;
+    background:#00000066;color:#FFFFFF;font-size:24px;font-family:inherit;backdrop-filter:blur(6px)}
   #scene svg{width:100%;height:100%;display:block}
   #water{position:absolute;left:0;right:0;bottom:0;height:26%;display:none;z-index:2;
        background:linear-gradient(#5E7E92,#40607A);opacity:.96}
@@ -143,9 +143,9 @@ const NAVER_KEY = "";
   #tunnel .tname{position:absolute;left:0;right:0;top:52%;text-align:center;color:#E8E4DC;font-size:15px;
        letter-spacing:.05em;text-shadow:0 1px 6px #000}
   #avatar{position:absolute;left:50%;top:50%;transform:translate(-50%,-100%);pointer-events:none;
-    z-index:6;display:none;width:96px;text-align:center}
-  #avatar svg{width:96px;height:96px;display:block;filter:drop-shadow(0 4px 8px #0007)}
-  #avatar b{display:block;margin-top:-6px;font-size:12px;font-weight:600;color:#fff;
+    z-index:6;display:none;width:74px;text-align:center}
+  #avatar svg{width:74px;height:74px;display:block;filter:drop-shadow(0 4px 8px #0007)}
+  #avatar b{display:block;margin-top:-4px;font-size:11px;font-weight:600;color:#fff;
     background:#E4572ECC;border-radius:999px;padding:3px 10px;text-shadow:0 1px 3px #0008}
   #fx{position:absolute;inset:0;pointer-events:none;z-index:3}
   #fx.rain:before,#fx.storm:before{content:"";position:absolute;inset:-20%;
@@ -1318,17 +1318,14 @@ function miniLevel(){
   return 9;
 }
 
-let miniFollow = false;
 function fitMini(){
   if (!mini || !path.length) return;
   const kr = path.filter(inKorea);
-  if (kr.length < 2 || metres(kr[0], kr[kr.length-1]) > 600000){
-    miniFollow = true;                       // 너무 넓으면 따라다니기
-    mini.setLevel(11);
-    mini.setCenter(new kakao.maps.LatLng(path[0].lat, path[0].lng));
+  if (kr.length < 2){
+    $("#mini").style.display = "none";
+    $("#eta").style.top = "58px";
     return;
   }
-  miniFollow = false;
   const b = new kakao.maps.LatLngBounds();
   kr.forEach(q => b.extend(new kakao.maps.LatLng(q.lat, q.lng)));
   mini.setBounds(b, 14, 14, 14, 14);
@@ -1390,7 +1387,7 @@ function buildMap(){
   $("#tune").onclick = toggleMusic;
   $("#tune").textContent = music ? "♪ 켬" : "♪ 끔";
   document.querySelectorAll("#satzoom button").forEach(b => {
-    b.onclick = () => { satAdj += (+b.dataset.z); };
+    b.onclick = () => { satAdj += (+b.dataset.z); put("ride:zoom", String(satAdj)); };
   });
   applyView();
   bindHold();
@@ -1504,6 +1501,15 @@ function buildSat(){
       level: satLevel(), draggable:false, scrollwheel:false,
       disableDoubleClickZoom:true, keyboardShortcuts:false
     });
+    const thin = path.filter((_, i) => i % Math.max(1, Math.ceil(path.length / 1500)) === 0)
+                     .map(q => new kakao.maps.LatLng(q.lat, q.lng));
+    new kakao.maps.Polyline({ map:satKakao, path:thin, strokeWeight:15,
+                              strokeColor:"#0F7A38", strokeOpacity:.5 });
+    satRoute = new kakao.maps.Polyline({ map:satKakao, path:thin, strokeWeight:11,
+                              strokeColor:"#25B24C", strokeOpacity:.95 });
+    satDone  = new kakao.maps.Polyline({ map:satKakao, path:[], strokeWeight:11,
+                              strokeColor:"#B9C0C6", strokeOpacity:.95 });
+    drawChevrons();
     setTimeout(() => satKakao.relayout(), 80);
     return;
   }
@@ -1522,9 +1528,26 @@ function buildSat(){
   satMap.setView([from.lat, from.lng], satZoom());
 }
 
+/* 길 위에 진행 방향 화살표 */
+let chevrons = [];
+function drawChevrons(){
+  chevrons.forEach(c => c.setMap(null));
+  chevrons = [];
+  if (!satKakao || !totalM) return;
+  const gap = Math.max(120, totalM / 70);          // 최대 70개
+  for (let d = gap * 0.5; d < totalM; d += gap){
+    const p = at(d);
+    chevrons.push(new kakao.maps.CustomOverlay({
+      map: satKakao, position: new kakao.maps.LatLng(p.lat, p.lng), zIndex: 4,
+      content: `<div style="transform:rotate(${(p.pan - 90).toFixed(0)}deg);
+        font-size:13px;line-height:1;color:#EAFBEF;text-shadow:0 1px 2px #0A5A2A">▶</div>`
+    }));
+  }
+}
+
 /* 카카오 축척 — 숫자가 작을수록 가깝습니다 */
 function satLevel(){
-  const base = mode.id === "walk" ? 3 : 7;   // 길이 앞뒤로 길게 보이도록
+  const base = mode.id === "walk" ? 1 : 3;   // 도로와 가게 이름이 보이는 정도
   return Math.max(1, Math.min(12, base - satAdj));
 }
 
@@ -1758,7 +1781,7 @@ function roadStep(p){
 
 /* 위성 화면은 매 프레임 위치를 따라갑니다 */
 let satRaf = null;
-let satAdj = 0;                     // 사용자가 조절한 단계
+let satAdj = parseInt(get("ride:zoom", "0"), 10) || 0;   // 조절값을 기억한다
 function satZoom(){
   const base = mode.kmh <= 10 ? 18 : mode.kmh <= 120 ? 16 : 13;
   return Math.max(3, Math.min(18, base + satAdj));
@@ -2141,7 +2164,7 @@ function applyView(){
   setAvatar();
   $("#scene").style.display = sceneOn ? "block" : "none";
   $("#sat").style.display   = satOn ? "block" : "none";
-  $("#satzoom").style.display = satOn ? "flex" : "none";
+  $("#satzoom").style.display = (viewMode === "map") ? "flex" : "none";
   $("#swap").textContent = viewMode === "map" ? ((hasNaver() && !isPlane()) ? "거리뷰" : "그림")
     : viewMode === "road" ? "그림" : "지도";
   if (satOn){
@@ -2220,12 +2243,11 @@ function jumpInner(m){
   }
   if (viewMode === "road") roadStep(p);
   faceAvatar(p.pan);
-  if (isPlane()){
+  if (wdot && wline){
     wdot.setLatLng([p.lat, p.lng]);
-    wline.setLatLngs(path.filter((q,i) => cum[i] <= m).map(q => [q.lat, q.lng]).concat([[p.lat, p.lng]]));
-  } else {
+    wline.setLatLngs(path.filter((q,i) => cum[i] <= m && i % 4 === 0).map(q => [q.lat, q.lng]).concat([[p.lat, p.lng]]));
+  } else if (mini && miniDot){
   miniDot.setPosition(pos);
-  if (miniFollow) mini.setCenter(pos);
   miniLine.setPath(path.filter((q,i) => cum[i] <= m && i % 4 === 0).map(q => new kakao.maps.LatLng(q.lat, q.lng)).concat([pos]));
   }
 
