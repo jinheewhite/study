@@ -609,9 +609,18 @@ const hhmm = (sec) => {
   return r ? `${h}시간 ${r}분` : `${h}시간`;
 };
 
+let rateTouched = false;
+function suggestRate(){
+  if (rateTouched || !totalM) return;
+  const target = minutes * 60 * 3;                 // 세 번쯤 앉으면 도착
+  const fit = RATES.filter(r => r.v < 60).find(r => tripSeconds(r.v) <= target);
+  rate = fit ? fit.v : 5;                          // 아주 멀면 5배
+}
+
 function renderRates(){
   const box = $("#ratelist");
   if (!box || !totalM) return;
+  suggestRate();
   box.innerHTML = "";
   RATES.forEach(r => {
     const real = tripSeconds(r.v);
@@ -623,7 +632,7 @@ function renderRates(){
       <span class="de">이번 ${minutes}분에 <b>${perS.toFixed(0)}km</b><br>
       도착까지 <b>${hhmm(real)}</b> · 집중 <b>${runs}번</b></span>`;
     b.onclick = () => {
-      rate = r.v; renderRates(); refresh();
+      rate = r.v; rateTouched = true; renderRates(); refresh();
       if (window.showStep) setTimeout(() => window.showStep(7), 260);
     };
     box.appendChild(b);
@@ -1198,6 +1207,7 @@ function startQuotes(){
 
 /* ───────── 출발 ───────── */
 async function begin(){
+  rateTouched = false;
   $("#setup").style.display = "none";
   $("#ride").style.display = "block";
   if (music) startMusic();
@@ -1308,10 +1318,19 @@ function miniLevel(){
   return 9;
 }
 
+let miniFollow = false;
 function fitMini(){
   if (!mini || !path.length) return;
+  const kr = path.filter(inKorea);
+  if (kr.length < 2 || metres(kr[0], kr[kr.length-1]) > 600000){
+    miniFollow = true;                       // 너무 넓으면 따라다니기
+    mini.setLevel(11);
+    mini.setCenter(new kakao.maps.LatLng(path[0].lat, path[0].lng));
+    return;
+  }
+  miniFollow = false;
   const b = new kakao.maps.LatLngBounds();
-  path.forEach(q => b.extend(new kakao.maps.LatLng(q.lat, q.lng)));
+  kr.forEach(q => b.extend(new kakao.maps.LatLng(q.lat, q.lng)));
   mini.setBounds(b, 14, 14, 14, 14);
 }
 
@@ -1474,6 +1493,7 @@ async function whereInWorld(lat, lng){
 
 /* 위성 사진 — 키 없이 쓸 수 있는 Esri 타일 */
 let satMap = null, satKakao = null, satTiles = null, satTileNow = "";
+let satRoute = null, satDone = null, wRoute = null, wDone = null;
 
 /* 국내는 카카오 스카이뷰 — 훨씬 선명합니다. 해외는 전 세계 위성 타일. */
 function buildSat(){
@@ -1499,6 +1519,10 @@ function buildSat(){
     map: L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom:17 }),
   };
   satTiles.map.addTo(satMap);
+  const wthin = path.filter((_, i) => i % Math.max(1, Math.ceil(path.length / 1200)) === 0);
+  wRoute = L.polyline(wthin.map(q => [q.lat, q.lng]),
+                      { color:"#C08A50", weight:3, opacity:.6, dashArray:"7 8" }).addTo(satMap);
+  wDone  = L.polyline([], { color:"#E4572E", weight:4, opacity:.95 }).addTo(satMap);
   satMap.setView([from.lat, from.lng], satZoom());
 }
 
@@ -1755,22 +1779,33 @@ function satFrame(){
 function satTick(){
   if (!totalM || !path.length) return;
   const q = at(want);
-  if (satKakao && !isPlane()){
+
+  /* 지나온 길 */
+  const done = [];
+  const skip = Math.max(1, Math.ceil(path.length / 1200));
+  for (let i = 0; i < path.length; i += skip){
+    if (cum[i] > want) break;
+    done.push(path[i]);
+  }
+  done.push({ lat:q.lat, lng:q.lng });
+
+  if (satKakao && !flying()){
     satKakao.setLevel(satLevel());
     const c = new kakao.maps.LatLng(q.lat, q.lng);
     satKakao.setCenter(c);
-    if (meOverlay){
+    if (satDone) satDone.setPath(done.map(d => new kakao.maps.LatLng(d.lat, d.lng)));
+    if (typeof meOverlay !== "undefined" && meOverlay){
       meOverlay.setPosition(c);
-      const nd = (q.pan > 180) ? -1 : 1;              // 서쪽으로 가면 뒤집는다
+      const nd = (q.pan > 180) ? -1 : 1;
       if (nd !== meDir){ meDir = nd; meOverlay.setContent(meContent(nd)); }
     }
   } else if (satMap){
-    const want = "map";
-    if (satTiles && satTileNow !== want){
+    if (satTiles && satTileNow !== "map"){
       Object.keys(satTiles).forEach(k => { if (satMap.hasLayer(satTiles[k])) satMap.removeLayer(satTiles[k]); });
-      satTiles[want].addTo(satMap);
-      satTileNow = want;
+      satTiles.map.addTo(satMap);
+      satTileNow = "map";
     }
+    if (wDone) wDone.setLatLngs(done.map(d => [d.lat, d.lng]));
     satMap.setView([q.lat, q.lng], satZoom(), { animate:false });
   }
 }
@@ -2188,6 +2223,7 @@ function jumpInner(m){
         if (groundM > 0) banner("인천공항", "이제 비행기를 탑니다");
         if (viewMode === "map"){          // 국내 지도 → 세계 지도
           satKakao = null; satMap = null; satTiles = null; satTileNow = "";
+          satRoute = null; satDone = null; wRoute = null; wDone = null;
           $("#sat").innerHTML = "";
           buildSat();
           setTimeout(() => { if (satMap) satMap.invalidateSize(); }, 80);
@@ -2202,6 +2238,7 @@ function jumpInner(m){
     wline.setLatLngs(path.filter((q,i) => cum[i] <= m).map(q => [q.lat, q.lng]).concat([[p.lat, p.lng]]));
   } else {
   miniDot.setPosition(pos);
+  if (miniFollow) mini.setCenter(pos);
   miniLine.setPath(path.filter((q,i) => cum[i] <= m && i % 4 === 0).map(q => new kakao.maps.LatLng(q.lat, q.lng)).concat([pos]));
   }
 
