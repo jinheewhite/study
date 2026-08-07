@@ -1278,7 +1278,7 @@ function fitMini(){
 }
 
 function buildMap(){
-  if (isPlane()){
+  if (isPlane() && groundM === 0){
     $("#ride").className = "plane";
     buildWorldMap();
     $("#swap").style.display = "";
@@ -1430,7 +1430,7 @@ let satMap = null, satKakao = null, satTiles = null, satTileNow = "";
 
 /* 국내는 카카오 스카이뷰 — 훨씬 선명합니다. 해외는 전 세계 위성 타일. */
 function buildSat(){
-  if (!isPlane()){
+  if (!flying()){
     if (satKakao) return;
     satKakao = new kakao.maps.Map($("#sat"), {
       center: new kakao.maps.LatLng(from.lat, from.lng),
@@ -1457,7 +1457,7 @@ function buildSat(){
 
 /* 카카오 축척 — 숫자가 작을수록 가깝습니다 */
 function satLevel(){
-  const base = mode.kmh <= 10 ? 1 : mode.kmh <= 120 ? 3 : 9;   // 걷기는 가게 이름까지
+  const base = mode.id === "walk" ? 1 : 5;   // 걷기는 가게 이름까지, 차는 동네 단위
   return Math.max(1, Math.min(12, base - satAdj));
 }
 
@@ -1645,22 +1645,23 @@ function setAvatar(){
   const on = (viewMode === "map");
   el.style.display = on ? "block" : "none";
   if (!on) return;
-  const art = mode.id === "walk" ? girlSVG(false)
-    : (mode.id === "plane" && travelled >= groundM) ? planeSVG() : carSVG();
+  const art = mode.id === "walk" ? girlSVG(false) : flying() ? planeSVG() : carSVG();
   el.innerHTML = art + (NAME ? `<b>${esc(NAME)}</b>` : "");
 }
 
 function faceAvatar(pan){
   const g = $("#avatar").querySelector("svg");
   if (!g) return;
-  if (mode.id === "plane") g.style.transform = `rotate(${(pan || 0).toFixed(0)}deg)`;
-  else g.style.transform = (pan > 180 ? "scaleX(-1)" : "scaleX(1)");
+  g.style.transform = flying()
+    ? `rotate(${(pan || 0).toFixed(0)}deg)`
+    : (pan > 180 ? "scaleX(-1)" : "scaleX(1)");
 }
 
 /* ── 네이버 거리뷰 ── */
 let pano = null, panoAt = -1e9;
 let groundM = 0, want = 0, lastTs = 0, legNow = "";
 const speedKmh = (d) => (isPlane() && d < groundM) ? 85 : mode.kmh;
+const flying = () => isPlane() && travelled >= groundM;   // 공항을 지났는가
 const hasNaver = () => !!(NAVER_KEY && window.naver && naver.maps && naver.maps.Panorama);
 
 function buildRoad(){
@@ -2116,7 +2117,15 @@ function jumpInner(m){
     if (leg !== legNow){
       legNow = leg;
       setAvatar();
-      if (leg === "air" && groundM > 0) banner("인천공항", "이제 비행기를 탑니다");
+      if (leg === "air"){
+        if (groundM > 0) banner("인천공항", "이제 비행기를 탑니다");
+        if (viewMode === "map"){          // 국내 지도 → 세계 지도
+          satKakao = null; satMap = null; satTiles = null; satTileNow = "";
+          $("#sat").innerHTML = "";
+          buildSat();
+          setTimeout(() => { if (satMap) satMap.invalidateSize(); }, 80);
+        }
+      }
     }
   }
   if (viewMode === "road") roadStep(p);
