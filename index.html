@@ -443,7 +443,6 @@ const MODES = [
   {id:"boat", name:"배",     kmh:45},
   {id:"plane",name:"비행기", kmh:850},
 ];
-const TIMES = [25, 60, 90, 120];
 const RATES = [{n:"실시간",v:1},{n:"2배",v:2},{n:"3배",v:3},{n:"5배",v:5},{n:"미리보기",v:60}];
 const STEP_M = 45;          // 로드뷰를 갱신할 거리 간격(m)
 const STOP_SEC = 12;        // 휴게소 정차 시간(초)
@@ -787,7 +786,6 @@ function init(){
   window.resetHome = () => { if (homeFrom) from = { ...homeFrom }; };
   window.closeTrips = () => { tl.style.display = "none"; };
 
-
   $("#flyBtn").onclick = async () => {
     if (!tripCity || !homeFrom){ $("#warn").textContent = "지금은 이미 타고 가는 중이야"; return; }
     touring = true;                       // 다시 바꾸지 않도록
@@ -944,7 +942,6 @@ async function check(){
   if (!skipTouched) startM = (farAway && travelEndM > 20000) ? travelEndM : 0;
   refresh();
 }
-
 
 /* 이 속도로 가면 끝까지 몇 시간 걸리는지 */
 function tripSeconds(r){
@@ -2054,14 +2051,6 @@ function loadPois(){
   }));
 }
 
-/* 이동 수단에 맞춘 지도 축척 — 느릴수록 가까이 */
-function miniLevel(){
-  if (mode.kmh <= 10) return 4;      // 걷기
-  if (mode.kmh <= 20) return 5;      // 자전거
-  if (mode.kmh <= 90) return 7;      // 버스·자가용
-  return 9;
-}
-
 function fitMini(){
   if (!mini || !path.length) return;
   const kr = path.filter(inKorea);
@@ -2196,7 +2185,6 @@ function countdown(){
     run();
   }, 900);
 }
-
 
 /* ═══════════ 해외 · 비행 ═══════════ */
 const isPlane = () => mode.id === "plane";
@@ -2382,15 +2370,6 @@ function buildSat(){
   [0, 120, 400].forEach(t => setTimeout(() => { try { satKakao.relayout(); } catch(e){} }, t));
 }
 
-function buildSatKakaoFallback(){
-  if (satKakao) return;
-  satKakao = new kakao.maps.Map($("#sat"), {
-    center: new kakao.maps.LatLng(at(want).lat, at(want).lng),
-    level: 12, draggable:false, scrollwheel:false
-  });
-  setTimeout(() => satKakao.relayout(), 80);
-}
-
 /* 길 위에 진행 방향 화살표 */
 let chevrons = [];
 function drawChevrons(){
@@ -2467,12 +2446,6 @@ function carSVG(dir){
       <circle cx="-4.2" cy="-1.6" r="1.7" fill="#26302F"/><circle cx="4.2" cy="-1.6" r="1.7" fill="#26302F"/>
     </g></svg>`;
 }
-
-
-
-/* ── 지도 위를 걸어가는 사람 ── */
-const AV = { skin:"#FFE2C6", hair:"#4A322C", top:"#FFFFFF", collar:"#3E8E86",
-             ribbon:"#E8563F", skirt:"#2A5A6E", shoe:"#6B4A38", bag:"#C98F4B", eye:"#2A1F1C" };
 
 function girlSVG(fast){
   const dur = fast ? "0.52s" : "0.86s", A = fast ? 30 : 21;
@@ -2804,7 +2777,6 @@ function drawTree(kind, x, base, sc, c, dk){
   return g(t);
 }
 
-
 /* ── 드문드문 지나가는 것들 ── */
 function prop(k, x, P, N){
   const g = (t) => `<g transform="translate(${x} ${GY-2})">${t}</g>`;
@@ -2851,7 +2823,6 @@ function prop(k, x, P, N){
       <rect x="-11" y="-24" width="22" height="8" rx="1.4" fill="${N?"#1B4E2C":"#2A7A46"}" stroke="#DCE6DC" stroke-width=".6"/>`);
   return "";
 }
-
 
 /* ── 비행기 창밖 ── */
 function buildSkyScene(){
