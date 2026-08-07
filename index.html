@@ -269,6 +269,7 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
   #arrive .btns{display:flex;flex-direction:column;gap:10px}
   #arrive .btns button{height:52px;border-radius:12px;font-size:15px;font-family:inherit;border:0}
   #arriveYes{background:var(--dawn);color:var(--ink);font-weight:700}
+  #arriveLoop{background:#132523;border:1px solid var(--mint);color:var(--mint)}
   #arriveNo{background:none;border:1px solid var(--line);color:#8FA9A4}
   #banner{position:absolute;left:0;right:0;top:38%;z-index:9;text-align:center;pointer-events:none;opacity:0;
        transition:opacity .5s}
@@ -327,7 +328,7 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
 </div>
 
 <div class="wrap" id="setup" style="display:none">
-  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v36</span></p>
+  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v39</span></p>
   <div id="dots"></div>
 
   <section class="step" data-step="1">
@@ -354,7 +355,7 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
   </section>
 
   <section class="step" data-step="3">
-    <h1>어떻게 갈까?</h1>
+    <h1 id="q3">어떻게 갈까?</h1>
     <p class="tiny" id="modeInfo"></p>
     <div class="chips" id="modes"></div>
     <div id="loopWrap" style="display:none">
@@ -428,6 +429,7 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
       <div id="arriveSpots"></div>
       <div class="btns">
         <button id="arriveYes">좋아, 둘러보자</button>
+        <button id="arriveLoop">이 동네 한 바퀴 돌래</button>
         <button id="arriveNo">오늘은 여기까지</button>
       </div>
     </div>
@@ -668,7 +670,7 @@ function init(){
   /* ── 어떻게 갈까 ── */
   function renderTimes(){
     const box = $("#times"); box.innerHTML = "";
-    const dest = loopMode ? "한 바퀴" : (to ? to.name : "도착지");
+    const dest = loopMode ? ((from && from.name ? from.name + " " : "") + "한 바퀴") : (to ? to.name : "도착지");
     const info = $("#timeInfo");
 
     const mk = (mins, rt, sub, reach) => {
@@ -691,11 +693,13 @@ function init(){
         const mins = Math.round(base / r.v / 60 / 5) * 5;
         if (mins < 15 || mins > 180) return;
         any = true;
-        mk(mins, r.v, r.v === 1 ? `${dest}까지 · 실제 속도` : `${dest}까지 · ${r.v}배속`);
+        mk(mins, r.v, loopMode
+          ? (r.v === 1 ? "한 바퀴 · 실제 속도" : `한 바퀴 · ${r.v}배속`)
+          : (r.v === 1 ? `${dest}까지 · 실제 속도` : `${dest}까지 · ${r.v}배속`));
       });
       if (info) info.textContent = any
-        ? `${dest}까지 한 번에 가려면 이만큼 앉으면 돼`
-        : `오늘은 갈 수 있는 만큼만 가자`;
+        ? (loopMode ? "한 바퀴 도는 데 이만큼 걸려" : `${dest}까지 한 번에 가려면 이만큼 앉으면 돼`)
+        : "오늘은 갈 수 있는 만큼만 가자";
       if (any){
         const hr = document.createElement("p");
         hr.className = "tiny";
@@ -708,7 +712,7 @@ function init(){
     [25, 60].forEach(t => {
       const b = document.createElement("button");
       b.className = "chip";
-      b.innerHTML = `${t}분<br><small style="opacity:.65">간 만큼만</small>`;
+      b.innerHTML = `${t}분<br><small style="opacity:.65">${loopMode ? "이만큼만 걷기" : "간 만큼만"}</small>`;
       b.setAttribute("aria-pressed", minutes === t && !rateTouched);
       b.onclick = () => {
         minutes = t; rateTouched = false;
@@ -737,6 +741,10 @@ function init(){
 
   function renderModes(){
     renderLoop();
+    const q3 = $("#q3");
+    if (q3) q3.textContent = loopMode
+      ? ((from && from.name ? from.name + " " : "") + "한 바퀴 — 어떻게 돌까?")
+      : "어떻게 갈까?";
     const box = $("#modes"); box.innerHTML = "";
     const info = $("#modeInfo");
 
@@ -1163,12 +1171,13 @@ function refresh(){
   const hrs  = km / eff;
   const time = hrs >= 1 ? `${Math.floor(hrs)}시간 ${Math.round((hrs%1)*60)}분` : `${Math.round(hrs*60)}분`;
   renderRates();
-  const wayTxt = loopMode ? "동네 한 바퀴" : touring ? `${from.name} 둘러보기` : `${from.name} → ${to.name}`;
+  const wayTxt = loopMode ? ((from && from.name ? from.name + " " : "") + "한 바퀴") : touring ? `${from.name} 둘러보기` : `${from.name} → ${to.name}`;
   $("#plan").innerHTML =
     `<b>${esc(wayTxt)}</b><br>` +
     `${mode.name}로 <u>${km.toFixed(0)}km</u> · ` +
     (runs <= 1 ? `오늘 <u>${minutes}분</u>이면 도착` : `집중 <u>${runs}번</u>이면 도착`) +
-    (spots.length > 1 ? `<br>도착하면 명소 <u>${spots.length}곳</u>을 걸어서 둘러봐` : "");
+    (loopMode ? `<br>돌고 나면 <u>${from.name}</u> 로 돌아와` :
+     spots.length > 1 ? `<br>도착하면 명소 <u>${spots.length}곳</u>을 걸어서 둘러봐` : "");
 }
 
 /* ───────── 거리 계산 ───────── */
@@ -1661,8 +1670,35 @@ document.addEventListener("click", (e) => {
   if (!b) return;
   if (b.id === "arriveYes"){ e.preventDefault(); onArriveYes(); }
   else if (b.id === "arriveNo"){ e.preventDefault(); onArriveNo(); }
+  else if (b.id === "arriveLoop"){ e.preventDefault(); onArriveLoop(); }
   else if (b.id === "jump"){ e.preventDefault(); onJump(); }
 });
+
+async function onArriveLoop(){
+  $("#arrive").style.display = "none";
+  const here = at(want);
+  const nm = (to && to.name) || "여기";
+  from = { name: nm, lat: here.lat, lng: here.lng };
+  loopMode = true; touring = false;
+  mode = MODES.find(m => m.id === (tourKmh > 20 ? "bike" : "walk"));
+  loopKm = (tourKmh > 20) ? 10 : 3;
+  banner(nm + " 한 바퀴", "길을 만드는 중…");
+
+  try { await loadRoute(); } catch(e){}
+  startM = 0; travelled = 0; want = 0; pausedSec = 0;
+  startTs = Date.now(); waitStart = 0; askedTour = true; legNow = "";
+  spots.forEach(sp => sp.seen = false);
+
+  viewMode = roadOK() ? "road" : "map";
+  satKakao = null; satRoute = null; satDone = null; chevrons = [];
+  if (typeof satLeaf !== "undefined"){ satLeaf = null; leafRoute = null; leafDone = null; }
+  if (typeof miniWorld !== "undefined") miniWorld = null;
+  $("#sat").innerHTML = ""; $("#road").innerHTML = "";
+  rv = null; rvc = null; panoAt = -1e9; lastPano = null;
+  buildMap();
+  setAvatar();
+  jump(0);
+}
 
 function onJump(){
   const t = nextStop();
@@ -1805,7 +1841,7 @@ function applyName(n){
   loadHome();
   $("#intro").style.display = "none";
   $("#setup").style.display = "flex";
-  $("#brand").innerHTML = '창밖 여행 <span id="ver">v36</span>';
+  $("#brand").innerHTML = '창밖 여행 <span id="ver">v39</span>';
   if (window.showStep) window.showStep(1);
   if (window.renderKinds) window.renderKinds();
   const q1 = $("#q1"); if (q1) q1.innerHTML = voc(NAME) + ",<br>오늘 어디 가고 싶어?";
@@ -2921,7 +2957,9 @@ function buildRoad(){
 
 function roadStep(p){
   if (!rv || !rvc) return;
-  if (Math.abs(travelled - panoAt) < 35) return;
+  const k = legs.length ? legAt(travelled) : mode.id;
+  const step = (k === "walk") ? 12 : (k === "run") ? 20 : (k === "bike") ? 45 : 70;
+  if (Math.abs(travelled - panoAt) < step) return;
   panoAt = travelled;
   const pos = new kakao.maps.LatLng(p.lat, p.lng);
   rvc.getNearestPanoId(pos, 90, (id) => {
