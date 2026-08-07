@@ -232,7 +232,10 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
   #arrive p{margin:12px 0 18px;font-size:17px;color:var(--paper)}
   #arrive .lbl{margin:16px 0 8px;font-size:11px;letter-spacing:.2em;color:var(--dim)}
   #arrive .box{max-height:86vh;overflow:auto}
+  #arriveQ{height:46px;margin-bottom:8px}
+  #arrive .sug{margin-bottom:8px}
   #arriveSpots{display:flex;flex-direction:column;gap:6px;margin-bottom:6px}
+  #arriveSpots button .no{display:inline-block;width:22px;color:var(--dawn);font-weight:700}
   #arriveSpots button{height:44px;border-radius:10px;border:1px solid var(--line);background:var(--panel);
     color:#DCE8E5;font-size:14px;font-family:inherit;text-align:left;padding:0 14px}
   #arriveSpots button[aria-pressed="true"]{border-color:var(--dawn);color:var(--dawn)}
@@ -393,6 +396,8 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
       <p class="lbl">어떻게 다닐까</p>
       <div class="chips" id="arriveModes"></div>
       <p class="lbl">어디부터 볼까</p>
+      <input id="arriveQ" placeholder="가고 싶은 곳 검색 · 여의도, 광화문…" autocomplete="off">
+      <div class="sug" id="arriveSug"></div>
       <div id="arriveSpots"></div>
       <div class="btns">
         <button id="arriveYes">좋아, 둘러보자</button>
@@ -1857,8 +1862,9 @@ async function loopPath(home, km){
 
 /* 도착 팝업 내용 */
 let tourKmh = 4, tourFirst = 0;
+let tourPick = [];
 function fillArrive(){
-  tourKmh = 4; tourFirst = 0;
+  tourKmh = 4; tourFirst = 0; tourPick = [];
   const mb = $("#arriveModes"); mb.innerHTML = "";
   [["걸어서",4],["뛰어서",11],["자전거로",16],["차로",40]].forEach(([n,v]) => {
     const b = document.createElement("button");
@@ -1867,22 +1873,52 @@ function fillArrive(){
     b.onclick = () => { tourKmh = v; fillArriveMarks(); };
     mb.appendChild(b);
   });
+  drawSpotList();
+  const q = $("#arriveQ"), sug = $("#arriveSug");
+  q.value = ""; sug.innerHTML = "";
+  let t = null;
+  q.oninput = () => {
+    clearTimeout(t);
+    const kw = q.value.trim();
+    if (kw.length < 2){ sug.innerHTML = ""; return; }
+    t = setTimeout(() => {
+      ps.keywordSearch(kw, (d, st) => {
+        sug.innerHTML = "";
+        if (st !== kakao.maps.services.Status.OK) return;
+        d.slice(0,5).forEach(x => {
+          const row = document.createElement("div");
+          row.innerHTML = `<b>${x.place_name}</b><small>${x.road_address_name || x.address_name}</small>`;
+          row.onclick = () => {
+            spots = spots.filter(sp => sp.name !== x.place_name);
+            spots.unshift({ name:x.place_name, desc:"", img:"", lat:+x.y, lng:+x.x, m:0 });
+            tourPick.push(x.place_name);
+            q.value = ""; sug.innerHTML = "";
+            drawSpotList();
+          };
+          sug.appendChild(row);
+        });
+      }, { location:new kakao.maps.LatLng(to.lat, to.lng), radius:20000 });
+    }, 250);
+  };
+  fillArriveMarks();
+}
+
+function drawSpotList(){
   const sb = $("#arriveSpots"); sb.innerHTML = "";
   spots.forEach((sp, i) => {
     const b = document.createElement("button");
-    b.textContent = sp.name;
+    const n = tourPick.indexOf(sp.name);
+    b.innerHTML = `<span class="no">${i === tourFirst ? "▶" : ""}</span>${esc(sp.name)}`;
     b.setAttribute("aria-pressed", tourFirst === i);
-    b.onclick = () => { tourFirst = i; fillArriveMarks(); };
+    b.onclick = () => { tourFirst = i; drawSpotList(); };
     sb.appendChild(b);
   });
-  fillArriveMarks();
 }
 function fillArriveMarks(){
   const mv = [4,11,16,40];
   $("#arriveModes").querySelectorAll("button").forEach((b,i) =>
     b.setAttribute("aria-pressed", tourKmh === mv[i]));
-  $("#arriveSpots").querySelectorAll("button").forEach((b,i) =>
-    b.setAttribute("aria-pressed", tourFirst === i));
+  drawSpotList();
 }
 
 /* 도착 후 관광 구간을 다시 짠다 */
