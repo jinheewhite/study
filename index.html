@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<script src="messages.js"></script>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0C1719">
 <meta name="mobile-web-app-capable" content="yes">
@@ -326,7 +327,7 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
 </div>
 
 <div class="wrap" id="setup" style="display:none">
-  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v24</span></p>
+  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v32</span></p>
   <div id="dots"></div>
 
   <section class="step" data-step="1">
@@ -474,14 +475,20 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
 
 <script>
 /* ───────── 상수 ───────── */
+const SP = window.SPEED || {};
 const MODES = [
-  {id:"walk", name:"걷기",   kmh:4},
-  {id:"run",  name:"뛰기",   kmh:11},
-  {id:"bike", name:"오토바이", kmh:60},
-  {id:"car",  name:"자동차", kmh:85},
-  {id:"boat", name:"배",     kmh:45},
-  {id:"plane",name:"비행기", kmh:850},
+  {id:"walk", name:"걷기",   kmh: SP.walk  || 4},
+  {id:"run",  name:"뛰기",   kmh: SP.run   || 11},
+  {id:"bike", name:"오토바이", kmh: SP.bike  || 60},
+  {id:"car",  name:"자동차", kmh: SP.car   || 85},
+  {id:"boat", name:"배",     kmh: SP.boat  || 45},
+  {id:"plane",name:"비행기", kmh: SP.plane || 850},
 ];
+const TM = window.TIMING || {};
+const gapOf = (key, lo, hi) => {
+  const v = TM[key] || [lo, hi];
+  return (v[0] * 1000) + Math.random() * ((v[1] - v[0]) * 1000);
+};
 const RATES = [{n:"실시간",v:1},{n:"2배",v:2},{n:"3배",v:3},{n:"5배",v:5},{n:"미리보기",v:60}];
 const STEP_M = 45;          // 로드뷰를 갱신할 거리 간격(m)
 const STOP_SEC = 12;        // 휴게소 정차 시간(초)
@@ -1022,6 +1029,7 @@ async function check(){
   const farAway = !from || !inKorea(to) || metres(from, to) / 1000 > 900;
 
   if (!from){ from = { name: to.name, lat: to.lat, lng: to.lng }; touring = true; }
+  else if (!loopMode) touring = false;   // 집이 있으면 언제나 집에서 출발
 
   $("#start").disabled = false;
   autoMode();
@@ -1152,7 +1160,10 @@ function refresh(){
 const R = 6371000;
 function metres(a, b){
   const dla = (b.lat - a.lat) * Math.PI/180;
-  const dlo = (b.lng - a.lng) * Math.PI/180;
+  let dlo = (b.lng - a.lng);
+  if (dlo > 180) dlo -= 360;                 // 날짜변경선을 넘을 때
+  if (dlo < -180) dlo += 360;
+  dlo = dlo * Math.PI/180;
   const la = (a.lat + b.lat)/2 * Math.PI/180;
   return Math.hypot(dla, dlo * Math.cos(la)) * R;
 }
@@ -1530,7 +1541,7 @@ function pickEvent(){
 }
 
 function startEvents(){
-  const gap = () => Math.max(35000, (70000 + Math.random() * 60000) / Math.max(1, rate * 0.5));
+  const gap = () => Math.max(20000, gapOf("창밖이야기", 70, 130) / Math.max(1, rate * 0.5));
   const loop = () => {
     if (screenIsRiding()) banner(pickEvent(), "");
     evTimer = setTimeout(loop, gap());
@@ -1569,6 +1580,22 @@ function renderStamps(){
 }
 
 /* 다음 이정표 — 공항 · 도착지 · 명소 */
+function onJump(){
+  const t = nextStop();
+  if (!t){                                   // 갈 곳이 없으면 직접 고른다
+    waitStart = waitStart || Date.now();
+    $("#arriveName").textContent = "어디로 갈까?";
+    $("#arriveSub").textContent = "가고 싶은 곳을 골라줘";
+    fillArrive();
+    $("#arrive").style.display = "flex";
+    return;
+  }
+  startM += (t.m - want);
+  want = t.m;
+  jump(want);
+  banner(t.name + "까지 건너뛰었어", "");
+}
+
 function nextStop(){
   const list = [];
   if (groundM > 1000) list.push({ m:groundM, name:depName });
@@ -1610,7 +1637,7 @@ function showPlace(){
 function startPlaces(){
   const loop = () => {
     if (screenIsRiding()) showPlace();
-    placeTimer = setTimeout(loop, Math.max(30000, (45000 + Math.random()*25000) / Math.max(1, rate*0.4)));
+    placeTimer = setTimeout(loop, Math.max(20000, gapOf("지명표시", 45, 70) / Math.max(1, rate*0.4)));
   };
   placeTimer = setTimeout(loop, 4000);
 }
@@ -1621,116 +1648,10 @@ let qTimer = null;
 /* ── 사용자 ───────────────────────────────────────
    이름은 앱 안에서 입력받아 저장합니다. 아래는 처음 주어지는 응원 메시지의 기본값입니다.
    {이름} 은 입력한 이름, {호칭} 은 "은서야 / 수빈아" 처럼 조사가 붙은 형태로 바뀝니다.   */
-const DEFAULT_MSG = [
-  "{호칭} 사랑해",
-  "우리 {이름} 최고~~~~",
-  "무엇을 해도 {이름} 응원해~~",
-  "오늘 힘들었지~~\n잠도 많이 왔지~~\n그래도 괜찮아\n너는 너니까",
-
-  "지금 그 자리에 앉아 있는 것만으로\n{보낸이는} 충분히 자랑스러워",
-  "잘 안 되는 날도 있어\n그런 날은 그냥 넘어가도 돼",
-  "밥은 먹었어?\n조금이라도 챙겨 먹자~~",
-  "어깨 좀 펴고~~\n목도 한 번 돌리고",
-  "너무 오래 앉아 있었으면\n일어나서 물 한 잔 마시고 와",
-  "{보낸이는} {이름} 편이야\n언제나",
-  "결과가 어떻든\n오늘 애쓴 건 사라지지 않아",
-  "조급해하지 마\n{이름} 속도로 가면 돼",
-  "남들이랑 비교하지 말자\n너는 너야",
-  "힘들면 힘들다고 말해도 돼\n혼자 참지 말고",
-  "오늘도 앉아준 거\n{보낸이가} 다 알아",
-  "조금만 더 하고\n푹 자자~~",
-  "눈 아프면 잠깐 감고 있어\n창밖도 좀 보고",
-  "우리 {이름} 이만큼 컸네\n{보낸이는} 그게 신기해",
-  "완벽하지 않아도 괜찮아\n끝까지만 가보자",
-  "오늘 못 한 건 내일 하면 돼\n큰일 안 나",
-  "{호칭}\n{보낸이가} 많이 사랑해",
-  "세상에서 제일 예쁜 우리 딸~~",
-  "지금 이 시간이\n나중에 너를 지켜줄 거야",
-  "힘내라는 말보다\n그냥 옆에 있어줄게",
-  "졸리면 오 분만 엎드려 자\n그것도 방법이야",
-  "시험은 지나가\n{이름는} 남아",
-  "{이름가} 어떤 선택을 하든\n{보낸이는} 믿어",
-  "오늘 하루도\n잘 버텨줘서 고마워",
-  "너무 애쓰지 마\n{보낸이} 눈엔 이미 충분해",
-  "먼 길 가는 중이야\n숨 좀 쉬면서 가자",
-  "이제 막 시작이야\n천천히 익숙해지면 돼",
-  "고등학교 첫해잖아\n서툰 게 당연해",
-  "삼 년은 생각보다 길어\n지금부터 다 쏟지 않아도 돼",
-  "지금 만드는 습관이\n삼 년을 끌고 가",
-  "야자하느라 늦었지~~\n오늘도 고생 많았어",
-  "친구랑 잘 지내는 것도\n공부만큼 중요해",
-  "아직 진로 못 정해도 괜찮아\n찾아가는 중이잖아",
-  "지금 힘든 건\n못해서가 아니라 처음이라서야",
-  "선배들도 다 이 시기를 지났어\n{이름는} 잘 가고 있어",
-  "일 학년 때는\n버티는 법을 배우는 거래",
-  "{호칭} 힘내\n{보낸이가} 늘 응원해",
-  "내신 준비하느라 많이 힘들지~~\n{보낸이도} 다 알아",
-  "시험 기간만 지나면\n조금은 편해질 거야",
-  "한 과목씩만 생각하자\n다 하려면 숨차",
-  "오늘 못 외운 건\n내일 아침에 더 잘 외워져",
-  "잘하고 싶은 그 마음\n그거면 이미 반은 한 거야",
-  "밤새우지 마\n자고 하는 게 더 남아",
-  "십 분 쉰다고 안 망해\n잠깐 눈 붙이고 와",
-  "다들 힘든 시기야\n너만 그런 거 아니야",
-  "시험 끝나면 뭐 먹을지\n그것만 생각하면서 버티자~~",
-  "지금 그 책상이\n제일 외로운 자리인 거 알아",
-  "{호칭}\n조금만 더 힘내자",
-  "끝나고 나면\n이만큼 컸구나 싶을 거야",
-  "오늘 하루치만 하면 돼\n그 이상은 욕심이야",
-  "오늘 엄마가 좀 심했지\n미안해",
-  "화는 화고\n{보낸이는} {이름} 사랑해",
-  "아까 한 말은\n{보낸이} 마음이 아니었어",
-  "서로 못난 말 했어도\n{보낸이는} 여전히 {이름} 편이야",
-  "부딪히는 건\n그만큼 가까워서 그런 거야",
-  "{호칭}\n그래도 사랑해",
-  "말은 그렇게 나갔지만\n{보낸이} 속은 늘 {이름} 걱정이야",
-  "{보낸이도} 엄마는 처음이라\n서툴러. 미안해",
-  "네가 어떤 모습이어도\n{보낸이} 딸이야",
-  "오늘 방문 쾅 닫고 들어갔지~~\n{보낸이는} 안 미워해",
-  "지금 사이가 어떻든\n{보낸이} 마음은 하나도 안 변했어",
-  "혼내고 나서\n{보낸이가} 더 오래 마음 아파",
-  "{이름를} 사랑하는 방법이\n가끔 서툴러서 그래",
-  "언젠가 이 시절을 얘기하면서\n같이 웃을 날이 올 거야",
-  "{호칭} 사랑해\n그건 어떤 날에도 똑같아",
-  "{호칭}\n오늘도 고마워",
-  "밥 잘 챙겨 먹고\n따뜻하게 입고 다녀",
-  "{보낸이는} 오늘도\n{이름} 생각했어",
-  "잘 자\n좋은 꿈 꿔",
-  "네가 있어서\n{보낸이} 하루가 괜찮아",
-  "무리하지 마\n{보낸이} 마음이 더 아파",
-  "손 시리면\n따뜻한 거 한 잔 마셔",
-  "{이름} 목소리 들으면\n{보낸이는} 힘이 나",
-  "오늘 뭐가 제일 힘들었어?\n이따 얘기해 줘",
-  "{호칭}\n그냥 한번 불러봤어",
-  "언제든 방문 열고 나와\n{보낸이} 여기 있어",
-  "너 웃는 게\n{보낸이는} 제일 좋아",
-  "지금 안아주고 싶다",
-  "태어나줘서 고마워\n{보낸이는} 그거 하나면 돼",
-  "{이름} 방 불 켜져 있는 거 보면\n{보낸이} 마음도 환해져",
-  "오늘 하루\n{이름} 곁에 있고 싶었어",
-  "아침에 못 일어나는 거\n{보낸이도} 다 알아~~",
-  "오늘 아침에 깨우느라\n{보낸이가} 좀 시끄러웠지",
-  "밤에 일찍 자야\n아침이 덜 힘들어~~",
-  "내일 아침엔\n조금만 더 일찍 일어나 보자",
-  "아침마다 전쟁이지만\n그래도 {이름} 얼굴 보는 게 좋아",
-  "졸린 눈으로 나가는 뒷모습\n{보낸이는} 늘 한참 봐",
-  "지금 졸리면 자\n{이름} 잠도 중요해",
-  "아침에 밥 못 먹고 나갔지\n{보낸이} 마음에 걸렸어",
-  "가기 싫은 날도 있는 거\n{보낸이도} 알아",
-  "빠진 날은 빠진 거고\n오늘은 오늘이야",
-  "힘들면 힘들다고 말해줘\n{보낸이는} 화 안 내",
-  "다 하려니까 버거운 거야\n하나씩만 하자",
-  "완벽하게 못 해도\n{보낸이는} 실망 안 해",
-  "오늘 이만큼 앉아 있는 것도\n{보낸이는} 고마워",
-  "{보낸이도} 힘들지만\n{이름} 사랑하는 건 그대로야",
-  "힘든 날에도\n{이름} 사랑해",
-  "미워한 적 한 번도 없어\n단 하루도",
-  "무슨 일이 있어도\n{보낸이는} {이름} 사랑해",
-  "이런 날도 저런 날도\n{호칭} 사랑해",
-  "{보낸이} 사랑은\n{이름}가 어떤 날이든 똑같아",
-  "{호칭} 오늘 수고했어\n진짜로",
-];
-const DEFAULT_FROM = "";      // 서명은 표시하지 않습니다
+const DEFAULT_MSG = (window.MESSAGES && window.MESSAGES.length)
+  ? window.MESSAGES.slice()
+  : ["{호칭} 사랑해"];
+const DEFAULT_FROM = (typeof window.FROM === "string") ? window.FROM : "";
 
 let NAME = "", MOM = [], FROM = DEFAULT_FROM;
 
@@ -1800,7 +1721,7 @@ function applyName(n){
   loadHome();
   $("#intro").style.display = "none";
   $("#setup").style.display = "flex";
-  $("#brand").innerHTML = '창밖 여행 <span id="ver">v24</span>';
+  $("#brand").innerHTML = '창밖 여행 <span id="ver">v32</span>';
   if (window.showStep) window.showStep(1);
   if (window.renderKinds) window.renderKinds();
   const q1 = $("#q1"); if (q1) q1.innerHTML = voc(NAME) + ",<br>오늘 어디 가고 싶어?";
@@ -1808,47 +1729,7 @@ function applyName(n){
   renderStamps();
 }
 
-const QUOTES = {
-  start: [
-    "출발이 반이라는 말은, 앉는 것이 제일 어렵다는 뜻이다",
-    "오늘 펼친 페이지가 오늘의 거리다",
-    "천 리 길도 한 걸음부터",
-    "처음 십 분만 견디면 그다음은 길이 데려간다",
-    "잘하려고 앉은 게 아니라, 앉으려고 앉은 거다",
-    "{호칭}, 이제 막 출발했어. 서두르지 마",
-  ],
-  mid: [
-    "지루한 구간이 제일 많은 거리를 준다",
-    "지금 눈에 안 보여도 거리는 줄고 있다",
-    "집중은 재능이 아니라 습관이다",
-    "중간이 제일 힘든 건 원래 그렇다",
-    "느려도 멈추지만 않으면 도착한다",
-    "오늘의 한 시간은 내일의 지름길이 된다",
-    "{호칭}, 잘 가고 있어",
-    "가장 멀리 가는 사람은 가장 오래 앉아 있던 사람이다",
-  ],
-  late: [
-    "여기까지 왔으면 이미 대단한 거다",
-    "끝이 보일 때가 제일 흔들린다. 조금만 더",
-    "마지막 십 분이 하루를 결정한다",
-    "{호칭}, 거의 다 왔어",
-    "끝까지 간 사람만 도착이라는 말을 쓴다",
-  ],
-  any: [
-    "공부는 오늘 하는 게 아니라 오늘도 하는 거다",
-    "머리가 좋은 것보다 엉덩이가 무거운 게 낫다",
-    "모르는 걸 아는 게 오늘의 수확이다",
-    "어제보다 한 문제 더",
-    "조급함은 속도를 늦춘다",
-    "쉬운 길로 가면 쉬운 곳에 도착한다",
-    "잘 안 되는 날도 거리에는 포함된다",
-    "비교할 사람은 어제의 나뿐이다",
-    "지금 이 시간은 아무도 대신 가줄 수 없다",
-    "실력은 조용히 쌓여서 갑자기 드러난다",
-    "책상 앞에 앉은 시간만큼 세상이 넓어진다",
-    "안 풀리면 잠깐 창밖을 보고 다시",
-  ],
-};
+const QUOTES = window.QUOTES_SET || { start:[], mid:[], late:[], any:["오늘도 한 걸음"] };
 
 function pickQuote(){
   const r = totalM ? nowKmSafe() / totalM : 0;
@@ -1875,11 +1756,11 @@ function showQuote(){
     q.classList.add("out");
     q.classList.remove("on");
     setTimeout(() => q.classList.remove("out"), 4600);
-  }, useMom ? 17000 : 11000);
+  }, useMom ? (TM.문구머무름 || 17) * 1000 : 11000);
 }
 
 function startQuotes(){
-  const gap = () => Math.max(45000, (70000 + Math.random() * 55000) / Math.max(1, rate * 0.4));
+  const gap = () => Math.max(25000, gapOf("응원문구", 70, 125) / Math.max(1, rate * 0.4));
   const loop = () => {
     if (screenIsRiding()) showQuote();
     qTimer = setTimeout(loop, gap());
@@ -1912,6 +1793,15 @@ async function begin(){
 
 async function loadRoute(){
   legs = []; spots = []; groundM = 0; travelEndM = 0;
+
+  /* 갈 방법은 지리로 정한다 — 바다 건너면 비행기, 배로만 가는 섬이면 배 */
+  if (!loopMode && from && to){
+    const far = metres(from, to) / 1000;
+    if (needsBoat(to) && !needsBoat(from)) mode = MODES.find(m => m.id === "boat");
+    else if (!inKorea(to) || far > 900 || isIsland(to) !== isIsland(from))
+      mode = MODES.find(m => m.id === "plane");
+    else if (isPlane() || isBoat()) mode = MODES.find(m => m.id === "car");
+  }
   const seg = [];                       // 이어붙일 좌표 조각들
 
   const push = (pts, kmh, kind) => {
@@ -1956,7 +1846,7 @@ async function loadRoute(){
                 : inKorea(to) ? nearestAirport(from) : INCHEON;
       depName = dep.name;
       if (metres(from, dep) > 25000){
-        push(await roadPath(from, dep), 85, "car");
+        push(await roadPath(from, dep) || greatCircle(from, { lat:dep.lat, lng:dep.lng }, 40), 85, "car");
         groundM = legs.reduce((a,l) => a + l.len, 0);
       }
       const arr = isBoat() ? null : arrivalAirport(to);
@@ -2350,7 +2240,7 @@ function fitMini(){
   }
   const b = new kakao.maps.LatLngBounds();
   kr.forEach(q => b.extend(new kakao.maps.LatLng(q.lat, q.lng)));
-  mini.setBounds(b, 14, 14, 14, 14);
+  mini.setBounds(b, 26, 26, 26, 26);
 }
 
 let miniWorld = null, miniWline = null, miniWdot = null;
@@ -2370,13 +2260,22 @@ function buildMiniWorld(){
                                      fillColor:"#7FD4C1", fillOpacity:1 }).addTo(miniWorld);
   miniWdot = L.circleMarker([from.lat, from.lng], { radius:4, color:"#fff", weight:2,
                                      fillColor:"#E4572E", fillOpacity:1 }).addTo(miniWorld);
-  miniWorld.fitBounds(L.latLngBounds(pts), { padding:[12,12] });
+  miniWorld.fitBounds(L.latLngBounds(pts), { padding:[26,26] });
   [0,150,500].forEach(t => setTimeout(() => { try { miniWorld.invalidateSize();
-    miniWorld.fitBounds(L.latLngBounds(pts), { padding:[12,12] }); } catch(e){} }, t));
+    miniWorld.fitBounds(L.latLngBounds(pts), { padding:[26,26] }); } catch(e){} }, t));
   return true;
 }
 
+/* 걸어 다닐 때는 거리뷰가 기본 */
+function pickFirstView(){
+  const k = legs.length ? legAt(startM) : mode.id;
+  const onFoot = (k === "walk" || k === "run" || k === "bike");
+  if (onFoot && roadOK()) viewMode = "road";
+  else if (viewMode === "road" && !roadOK()) viewMode = "map";
+}
+
 function buildMap(){
+  pickFirstView();
   if (to && !inKorea(to) && typeof L !== "undefined"){
     if (buildMiniWorld()){
       $("#mini").style.display = "";
@@ -2420,7 +2319,7 @@ function buildMap(){
     if (waitStart){ pausedSec += (Date.now() - waitStart) / 1000 * rate; waitStart = 0; }
 
     /* 도착했으니 화면을 그 도시로 새로 연다 */
-    viewMode = "map";
+    viewMode = roadOK() ? "road" : "map";
     curTheme = "metro";
     satKakao = null; satRoute = null; satDone = null; chevrons = [];
     if (typeof satLeaf !== "undefined"){ satLeaf = null; leafRoute = null; leafDone = null; }
@@ -2441,21 +2340,7 @@ function buildMap(){
     waitStart = 0;
     end(true);
   };
-  $("#jump").onclick = () => {
-    const t = nextStop();
-    if (!t){                                   // 갈 곳이 없으면 직접 고른다
-      waitStart = waitStart || Date.now();
-      $("#arriveName").textContent = "어디로 갈까?";
-      $("#arriveSub").textContent = "가고 싶은 곳을 골라줘";
-      fillArrive();
-      $("#arrive").style.display = "flex";
-      return;
-    }
-    startM += (t.m - want);
-    want = t.m;
-    jump(want);
-    banner(t.name + "까지 건너뛰었어", "");
-  };
+  $("#jump").onclick = onJump;
   $("#msgbtn").onclick = () => {
     quoteOn = !quoteOn;
     $("#msgbtn").style.opacity = quoteOn ? "1" : ".4";
@@ -2504,7 +2389,7 @@ function buildMap(){
     if (waitStart){ pausedSec += (Date.now() - waitStart) / 1000 * rate; waitStart = 0; }
 
     /* 도착했으니 화면을 그 도시로 새로 연다 */
-    viewMode = "map";
+    viewMode = roadOK() ? "road" : "map";
     curTheme = "metro";
     satKakao = null; satRoute = null; satDone = null; chevrons = [];
     if (typeof satLeaf !== "undefined"){ satLeaf = null; leafRoute = null; leafDone = null; }
@@ -2525,21 +2410,7 @@ function buildMap(){
     waitStart = 0;
     end(true);
   };
-  $("#jump").onclick = () => {
-    const t = nextStop();
-    if (!t){                                   // 갈 곳이 없으면 직접 고른다
-      waitStart = waitStart || Date.now();
-      $("#arriveName").textContent = "어디로 갈까?";
-      $("#arriveSub").textContent = "가고 싶은 곳을 골라줘";
-      fillArrive();
-      $("#arrive").style.display = "flex";
-      return;
-    }
-    startM += (t.m - want);
-    want = t.m;
-    jump(want);
-    banner(t.name + "까지 건너뛰었어", "");
-  };
+  $("#jump").onclick = onJump;
   $("#msgbtn").onclick = () => {
     quoteOn = !quoteOn;
     $("#msgbtn").style.opacity = quoteOn ? "1" : ".4";
@@ -2812,11 +2683,15 @@ function girlSVG(dir, moving){
       <rect x="2.1" y="-16.3" width="1.4" height="4.8" rx=".7" fill="#4A322C"/>
       <circle cx="0" cy="-15.2" r="2.5" fill="#FFE2C6"/>
       <path d="M-2.8 -16.1 Q0 -19.4 2.8 -16.1 Q1.4 -17.5 0 -17.2 Q-1.4 -17.5 -2.8 -16.1 Z" fill="#4A322C"/>
-      <ellipse cx="-1.5" cy="-14.5" rx=".6" ry=".4" fill="#FF9E8A" opacity=".6"/>
-      <ellipse cx="1.5" cy="-14.5" rx=".6" ry=".4" fill="#FF9E8A" opacity=".6"/>
-      <circle cx="-.85" cy="-15.1" r=".33" fill="#2A1F1C"/>
-      <circle cx=".85" cy="-15.1" r=".33" fill="#2A1F1C"/>
-      <path d="M-.5 -14.1 Q0 -13.7 .5 -14.1" stroke="#2A1F1C" stroke-width=".22" fill="none" stroke-linecap="round"/>
+      <ellipse cx="-1.65" cy="-14.35" rx=".62" ry=".42" fill="#FF9E8A" opacity=".62"/>
+      <ellipse cx="1.65" cy="-14.35" rx=".62" ry=".42" fill="#FF9E8A" opacity=".62"/>
+      <ellipse cx="-.85" cy="-15.2" rx=".34" ry=".45" fill="#2A1F1C"/>
+      <ellipse cx=".85" cy="-15.2" rx=".34" ry=".45" fill="#2A1F1C"/>
+      <circle cx="-.72" cy="-15.4" r=".14" fill="#FFFFFF"/>
+      <circle cx=".98" cy="-15.4" r=".14" fill="#FFFFFF"/>
+      <path d="M-1.35 -16.05 Q-.85 -16.4 -.35 -16.05" stroke="#4A322C" stroke-width=".17" fill="none" stroke-linecap="round"/>
+      <path d="M.35 -16.05 Q.85 -16.4 1.35 -16.05" stroke="#4A322C" stroke-width=".17" fill="none" stroke-linecap="round"/>
+      <path d="M-.62 -13.95 Q0 -13.25 .62 -13.95" stroke="#B0503C" stroke-width=".3" fill="none" stroke-linecap="round"/>
       <g>${sw(-A,A,2.2,-12.4)}<rect x="1.65" y="-12.5" width="1.1" height="4.3" rx=".55" fill="#FFF"/>
         <circle cx="2.2" cy="-8.1" r=".7" fill="#FFE2C6"/></g>
     </g></g></svg>`;
@@ -3433,6 +3308,7 @@ function run(){
   startQuotes();
   startPlaces();
   jump(startM);
+  $("#jump").onclick = onJump;
   const jb0 = $("#jump");
   if (jb0){
     const t0 = nextStop();
