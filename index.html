@@ -151,7 +151,7 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
   @keyframes lamp{to{background-position:-120px 0}}
   #tunnel .tname{position:absolute;left:0;right:0;top:52%;text-align:center;color:#E8E4DC;font-size:15px;
        letter-spacing:.05em;text-shadow:0 1px 6px #000}
-  #avatar{position:absolute;left:50%;top:50%;transform:translate(-50%,-100%);pointer-events:none;
+  #avatar{position:absolute;left:50%;top:62%;transform:translate(-50%,-100%);pointer-events:none;
     z-index:6;display:none;width:74px;text-align:center}
   #avatar svg{width:74px;height:74px;display:block;filter:drop-shadow(0 4px 8px #0007)}
   #avatar b{display:block;margin-top:-4px;font-size:11px;font-weight:600;color:#fff;
@@ -327,7 +327,7 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
 </div>
 
 <div class="wrap" id="setup" style="display:none">
-  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v32</span></p>
+  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v36</span></p>
   <div id="dots"></div>
 
   <section class="step" data-step="1">
@@ -638,13 +638,28 @@ function init(){
     if (groundM > 1000) opts.push({ m:groundM, label:depName + "부터" });
     if (travelEndM > 1000 && travelEndM > groundM + 1000)
       opts.push({ m:travelEndM, label:(to ? to.name : "도착지") + " 도착부터" });
+    if (!loopMode && to && travelEndM > 1000)
+      opts.push({ m:-1, label:to.name + " 한 바퀴만", loop:true });
     opts.forEach(o => {
       const b = document.createElement("button");
       b.className = "bigpick";
       b.setAttribute("aria-pressed", Math.abs(startM - o.m) < 1);
       b.innerHTML = `<b>${esc(o.label)}</b>` +
-        (o.m > 0 ? `<small>여기까지는 건너뛰기</small>` : `<small>처음부터 다 가기</small>`);
-      b.onclick = () => { startM = o.m; skipTouched = true; renderStart(); refresh(); showStep(3); };
+        (o.loop ? `<small>그 동네를 걸어서 한 바퀴</small>`
+         : o.m > 0 ? `<small>여기까지는 건너뛰기</small>`
+         : `<small>처음부터 다 가기</small>`);
+      b.onclick = async () => {
+        if (o.loop){                                   // 그 동네를 도는 코스로
+          loopMode = true; touring = false; skipTouched = true; startM = 0;
+          from = { name: to.name, lat: to.lat, lng: to.lng };
+          mode = MODES.find(m => m.id === "walk"); loopKm = 3;
+          await check();
+          showStep(3);
+          return;
+        }
+        loopMode = false;
+        startM = o.m; skipTouched = true; renderStart(); refresh(); showStep(3);
+      };
       box.appendChild(b);
     });
     $("#startInfo").textContent = opts.length > 1 ? "건너뛰고 싶은 만큼 골라도 돼" : "여기서 시작할게";
@@ -1377,6 +1392,32 @@ const TRIPS = [
   { n:"전주",      s:"한옥마을",           lat:35.8150, lng:127.1530, kr:1 },
 ];
 
+/* 해외에서 장소 이름으로 찾기 — 위키백과 */
+async function worldPlaceSearch(q, near){
+  const langs = ["ko", "en"];
+  for (const lang of langs){
+    try {
+      const su = `https://${lang}.wikipedia.org/w/api.php?action=query&list=search`
+               + `&srsearch=${encodeURIComponent(q)}&srlimit=8&format=json&origin=*`;
+      const sj = await (await fetch(su)).json();
+      const titles = (sj.query?.search || []).map(x => x.title);
+      if (!titles.length) continue;
+      const du = `https://${lang}.wikipedia.org/w/api.php?action=query&titles=`
+               + encodeURIComponent(titles.join("|"))
+               + `&prop=coordinates|pageimages|extracts&piprop=thumbnail&pithumbsize=800`
+               + `&exintro=1&explaintext=1&exsentences=1&format=json&origin=*`;
+      const dj = await (await fetch(du)).json();
+      const out = Object.values(dj.query?.pages || {})
+        .filter(p => p.coordinates && p.coordinates[0])
+        .map(p => ({ name:p.title, lat:p.coordinates[0].lat, lng:p.coordinates[0].lon,
+                     desc:(p.extract || "").trim(), img:p.thumbnail?.source || "" }))
+        .filter(p => !near || metres(near, p) < 80000);
+      if (out.length) return out.slice(0, 5);
+    } catch(e){}
+  }
+  return [];
+}
+
 /* 주변 명소 하나를 골라 좌표까지 가져온다 */
 async function pickSpotNear(p){
   const list = await Promise.race([
@@ -1580,6 +1621,49 @@ function renderStamps(){
 }
 
 /* 다음 이정표 — 공항 · 도착지 · 명소 */
+function onArriveYes(){
+    $("#arrive").style.display = "none";
+    const ok = spots.filter(sp => typeof sp.lat === "number" && typeof sp.lng === "number");
+    const first = spots[tourFirst];
+    const order = (first && typeof first.lat === "number")
+      ? [first, ...ok.filter(sp => sp !== first)] : ok;
+    if (order.length) rebuildTour(order, tourKmh);
+    mode = MODES.find(m => m.kmh === tourKmh) || MODES.find(m => m.id === "walk");
+    if (waitStart){ pausedSec += (Date.now() - waitStart) / 1000 * rate; waitStart = 0; }
+
+    /* 도착했으니 화면을 그 도시로 새로 연다 */
+    viewMode = roadOK() ? "road" : "map";
+    curTheme = "metro";
+    satKakao = null; satRoute = null; satDone = null; chevrons = [];
+    if (typeof satLeaf !== "undefined"){ satLeaf = null; leafRoute = null; leafDone = null; }
+    $("#sat").innerHTML = "";
+    rv = null; rvc = null; panoAt = -1e9; lastPano = null;
+    $("#road").innerHTML = "";
+    applyView();
+    setAvatar();
+    jump(want);
+}
+
+function onArriveNo(){
+    $("#arrive").style.display = "none";
+    if (askedTour && waitStart && travelled >= travelEndM - 100){
+      /* 구경 중에 그냥 닫으면 이어서 간다 */
+      pausedSec += (Date.now() - waitStart) / 1000 * rate; waitStart = 0;
+      return;
+    }
+    waitStart = 0;
+    end(true);
+}
+
+/* 어떤 화면이든 이 세 버튼은 항상 눌린다 */
+document.addEventListener("click", (e) => {
+  const b = e.target && e.target.closest ? e.target.closest("button") : null;
+  if (!b) return;
+  if (b.id === "arriveYes"){ e.preventDefault(); onArriveYes(); }
+  else if (b.id === "arriveNo"){ e.preventDefault(); onArriveNo(); }
+  else if (b.id === "jump"){ e.preventDefault(); onJump(); }
+});
+
 function onJump(){
   const t = nextStop();
   if (!t){                                   // 갈 곳이 없으면 직접 고른다
@@ -1721,7 +1805,7 @@ function applyName(n){
   loadHome();
   $("#intro").style.display = "none";
   $("#setup").style.display = "flex";
-  $("#brand").innerHTML = '창밖 여행 <span id="ver">v32</span>';
+  $("#brand").innerHTML = '창밖 여행 <span id="ver">v36</span>';
   if (window.showStep) window.showStep(1);
   if (window.renderKinds) window.renderKinds();
   const q1 = $("#q1"); if (q1) q1.innerHTML = voc(NAME) + ",<br>오늘 어디 가고 싶어?";
@@ -1941,24 +2025,37 @@ function fillArrive(){
     clearTimeout(t);
     const kw = q.value.trim();
     if (kw.length < 2){ sug.innerHTML = ""; return; }
-    t = setTimeout(() => {
+    t = setTimeout(async () => {
+      const here = to || from;
+      const add = (name, lat, lng, sub, desc, img) => {
+        const row = document.createElement("div");
+        row.innerHTML = `<b>${esc(name)}</b>` + (sub ? `<small>${esc(sub)}</small>` : "");
+        row.onclick = () => {
+          spots = spots.filter(sp => sp.name !== name);
+          spots.unshift({ name, desc: desc || "", img: img || "", lat, lng, m:0 });
+          tourPick.push(name);
+          q.value = ""; sug.innerHTML = "";
+          drawSpotList();
+        };
+        sug.appendChild(row);
+      };
+
+      if (here && !inKorea(here)){                     // 해외 — 그곳 지명으로
+        sug.innerHTML = "<div><b>찾는 중…</b></div>";
+        const list = await worldPlaceSearch(kw, here);
+        sug.innerHTML = "";
+        if (!list.length){ sug.innerHTML = "<div><b>못 찾았어</b><small>다른 이름으로 해볼까</small></div>"; return; }
+        list.forEach(x => add(x.name, x.lat, x.lng, "", x.desc, x.img));
+        return;
+      }
+
+      if (!ps){ sug.innerHTML = ""; return; }
       ps.keywordSearch(kw, (d, st) => {
         sug.innerHTML = "";
         if (st !== kakao.maps.services.Status.OK) return;
-        d.slice(0,5).forEach(x => {
-          const row = document.createElement("div");
-          row.innerHTML = `<b>${x.place_name}</b><small>${x.road_address_name || x.address_name}</small>`;
-          row.onclick = () => {
-            spots = spots.filter(sp => sp.name !== x.place_name);
-            spots.unshift({ name:x.place_name, desc:"", img:"", lat:+x.y, lng:+x.x, m:0 });
-            tourPick.push(x.place_name);
-            q.value = ""; sug.innerHTML = "";
-            drawSpotList();
-          };
-          sug.appendChild(row);
-        });
-      }, { location:new kakao.maps.LatLng(to.lat, to.lng), radius:20000 });
-    }, 250);
+        d.slice(0,5).forEach(x => add(x.place_name, +x.y, +x.x, x.road_address_name || x.address_name));
+      }, { location:new kakao.maps.LatLng(here.lat, here.lng), radius:20000 });
+    }, 300);
   };
   fillArriveMarks();
 }
@@ -2308,39 +2405,6 @@ function buildMap(){
     viewMode = ring[(ring.indexOf(viewMode) + 1) % ring.length];
     applyView();
   };
-    $("#arriveYes").onclick = () => {
-    $("#arrive").style.display = "none";
-    const ok = spots.filter(sp => typeof sp.lat === "number" && typeof sp.lng === "number");
-    const first = spots[tourFirst];
-    const order = (first && typeof first.lat === "number")
-      ? [first, ...ok.filter(sp => sp !== first)] : ok;
-    if (order.length) rebuildTour(order, tourKmh);
-    mode = MODES.find(m => m.kmh === tourKmh) || MODES.find(m => m.id === "walk");
-    if (waitStart){ pausedSec += (Date.now() - waitStart) / 1000 * rate; waitStart = 0; }
-
-    /* 도착했으니 화면을 그 도시로 새로 연다 */
-    viewMode = roadOK() ? "road" : "map";
-    curTheme = "metro";
-    satKakao = null; satRoute = null; satDone = null; chevrons = [];
-    if (typeof satLeaf !== "undefined"){ satLeaf = null; leafRoute = null; leafDone = null; }
-    $("#sat").innerHTML = "";
-    rv = null; rvc = null; panoAt = -1e9; lastPano = null;
-    $("#road").innerHTML = "";
-    applyView();
-    setAvatar();
-    jump(want);
-  };
-  $("#arriveNo").onclick = () => {
-    $("#arrive").style.display = "none";
-    if (askedTour && waitStart && travelled >= travelEndM - 100){
-      /* 구경 중에 그냥 닫으면 이어서 간다 */
-      pausedSec += (Date.now() - waitStart) / 1000 * rate; waitStart = 0;
-      return;
-    }
-    waitStart = 0;
-    end(true);
-  };
-  $("#jump").onclick = onJump;
   $("#msgbtn").onclick = () => {
     quoteOn = !quoteOn;
     $("#msgbtn").style.opacity = quoteOn ? "1" : ".4";
@@ -2378,39 +2442,6 @@ function buildMap(){
     $("#mini").classList.toggle("big");
     setTimeout(() => { mini.relayout(); fitMini(); }, 300);
   };
-  $("#arriveYes").onclick = () => {
-    $("#arrive").style.display = "none";
-    const ok = spots.filter(sp => typeof sp.lat === "number" && typeof sp.lng === "number");
-    const first = spots[tourFirst];
-    const order = (first && typeof first.lat === "number")
-      ? [first, ...ok.filter(sp => sp !== first)] : ok;
-    if (order.length) rebuildTour(order, tourKmh);
-    mode = MODES.find(m => m.kmh === tourKmh) || MODES.find(m => m.id === "walk");
-    if (waitStart){ pausedSec += (Date.now() - waitStart) / 1000 * rate; waitStart = 0; }
-
-    /* 도착했으니 화면을 그 도시로 새로 연다 */
-    viewMode = roadOK() ? "road" : "map";
-    curTheme = "metro";
-    satKakao = null; satRoute = null; satDone = null; chevrons = [];
-    if (typeof satLeaf !== "undefined"){ satLeaf = null; leafRoute = null; leafDone = null; }
-    $("#sat").innerHTML = "";
-    rv = null; rvc = null; panoAt = -1e9; lastPano = null;
-    $("#road").innerHTML = "";
-    applyView();
-    setAvatar();
-    jump(want);
-  };
-  $("#arriveNo").onclick = () => {
-    $("#arrive").style.display = "none";
-    if (askedTour && waitStart && travelled >= travelEndM - 100){
-      /* 구경 중에 그냥 닫으면 이어서 간다 */
-      pausedSec += (Date.now() - waitStart) / 1000 * rate; waitStart = 0;
-      return;
-    }
-    waitStart = 0;
-    end(true);
-  };
-  $("#jump").onclick = onJump;
   $("#msgbtn").onclick = () => {
     quoteOn = !quoteOn;
     $("#msgbtn").style.opacity = quoteOn ? "1" : ".4";
@@ -2859,7 +2890,7 @@ function planeSVG(){
 
 function setAvatar(){
   const el = $("#avatar");
-  const on = (viewMode === "map");
+  const on = (viewMode === "map" || viewMode === "road");
   el.style.display = on ? "block" : "none";
   if (!on) return;
   const k = legs.length ? legAt(travelled) : mode.id;
@@ -3308,7 +3339,6 @@ function run(){
   startQuotes();
   startPlaces();
   jump(startM);
-  $("#jump").onclick = onJump;
   const jb0 = $("#jump");
   if (jb0){
     const t0 = nextStop();
