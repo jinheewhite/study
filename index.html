@@ -113,6 +113,8 @@ const NAVER_KEY = "";
   #tripList button{height:56px;border-radius:12px;border:1px solid var(--line);background:var(--panel);
     color:var(--paper);font-size:14px;font-family:inherit;line-height:1.4}
   #tripList button small{display:block;font-size:11px;color:var(--dim);margin-top:3px}
+  #skipAir,#skipEnd{width:100%;height:48px;margin-top:8px;border-radius:11px;border:1px solid var(--line);
+    background:#101F21;color:#8FA9A4;font-size:14px;font-family:inherit}
   #flyBtn{width:100%;height:50px;margin-top:10px;border-radius:12px;border:1px solid var(--dawn);
     background:#241C15;color:var(--dawn);font-size:14px;font-family:inherit}
   #around{width:100%;height:52px;margin-top:16px;border-radius:12px;border:1px solid var(--line);
@@ -289,7 +291,7 @@ const NAVER_KEY = "";
     <div class="sug" id="sTo"></div>
     <button id="tripBtn">✈  유명한 곳에서 골라볼래</button>
     <div id="tripList"></div>
-    <p class="tiny" style="margin-top:20px"><b id="fromNow">우리 집</b>에서 출발할게</p>
+    <p class="tiny" style="margin-top:20px"><b id="fromNow">우리 집</b><span id="fromLabel">에서 출발할게</span></p>
     <button id="fromBtn">집 위치 정하기</button>
     <div id="fromWrap" style="display:none">
       <button id="here">📍  여기를 우리 집으로</button>
@@ -322,6 +324,9 @@ const NAVER_KEY = "";
       <div class="chips" id="musics"></div>
       <label>속도</label>
       <div id="ratelist"></div>
+      <label>건너뛰기</label>
+      <button id="skipAir">✈  공항까지는 갔다고 치기</button>
+      <button id="skipEnd">🛬  다 도착했다고 치고 구경하기</button>
     </details>
     <div id="stamps"></div>
     <button id="switch">이름 바꾸기</button>
@@ -545,12 +550,20 @@ function init(){
     b.innerHTML = `${t.n}<small>${t.s}</small>`;
     b.onclick = async () => {
       tl.querySelectorAll("button").forEach(x => x.disabled = true);
-      b.innerHTML = `${t.n}<small>가는 중…</small>`;
-      touring = false;
-      if (window.resetHome) window.resetHome();
-      to = { name: t.n, lat: t.lat, lng: t.lng };
-      $("#qTo").value = t.n;
+      b.innerHTML = `${t.n}<small>둘러볼 곳 찾는 중…</small>`;
+
+      /* 목록에서 고른 곳은 언제나 "그곳을 둘러보기" */
+      touring = true;
+      tripCity = { name: t.n, lat: t.lat, lng: t.lng };
+      const spot = await pickSpotNear(tripCity);
+      from = { name: t.n, lat: t.lat, lng: t.lng };
+      to = spot || { name: t.n + " 한 바퀴", lat: t.lat + 0.011, lng: t.lng + 0.011 };
+      mode = MODES.find(m => m.id === "walk");
+      $("#qFrom").value = from.name;
+      $("#qTo").value = to.name;
       $("#sTo").innerHTML = "";
+      const fn = $("#fromNow"); if (fn) fn.textContent = from.name;
+
       tl.querySelectorAll("button").forEach(x => x.disabled = false);
       b.innerHTML = `${t.n}<small>${t.s}</small>`;
       await check();
@@ -569,6 +582,19 @@ function init(){
     const open = tl.style.display === "grid";
     tl.style.display = open ? "none" : "grid";
     $("#tripBtn").textContent = open ? "✈  아니, 오늘은 멀리 떠날래" : "✈  어디로 갈까?";
+  };
+
+  $("#skipAir").onclick = () => {
+    if (!groundM){ $("#warn").textContent = "이 여정엔 공항 구간이 없어"; return; }
+    startM = groundM;
+    $("#skipAir").textContent = "✈  공항부터 시작 ✓";
+    refresh();
+  };
+  $("#skipEnd").onclick = () => {
+    if (!totalM){ $("#warn").textContent = "먼저 갈 곳을 정해줘"; return; }
+    startM = 0;
+    travelled = totalM; want = totalM;
+    end(true);
   };
 
   $("#flyBtn").onclick = async () => {
@@ -719,13 +745,17 @@ async function check(){
 
   $("#start").disabled = false;
   autoMode();
-  const fn = $("#fromNow"); if (fn) fn.textContent = from.name;
+  const fn = $("#fromNow");
+  if (fn) fn.textContent = from.name;
+  const fl = $("#fromLabel");
+  if (fl) fl.textContent = touring ? "에서 둘러볼게" : "에서 출발할게";
   $("#hint").textContent = `${from.name} → ${to.name}`;
   if (window.refreshNav) window.refreshNav();
 
   $("#plan").style.display = "block";
   $("#plan").innerHTML = "길을 찾는 중…";
-  path = []; cum = []; totalM = 0;
+  path = []; cum = []; totalM = 0; startM = 0;
+  const sa = $("#skipAir"); if (sa) sa.textContent = "✈  공항까지는 갔다고 치기";
   try {
     await loadRoute();
   } catch(e){
@@ -785,7 +815,7 @@ function renderRates(){
 /* 이동 수단·시간·배속이 바뀔 때마다 예상치를 다시 계산한다 */
 function refresh(){
   if (!totalM) return;
-  const km   = totalM / 1000;
+  const km   = Math.max(0, totalM - startM) / 1000;
   const eff  = mode.kmh * rate;               // 실효 속도
   const perS = eff * minutes / 60;            // 이번 한 번에 가는 거리
   const runs = Math.max(1, Math.ceil(km / perS));
@@ -2092,7 +2122,7 @@ function faceAvatar(pan){
 
 /* ── 네이버 거리뷰 ── */
 let pano = null, panoAt = -1e9;
-let groundM = 0, want = 0, pausedSec = 0, legNow = "", depName = "공항";
+let groundM = 0, want = 0, pausedSec = 0, legNow = "", depName = "공항", startM = 0;
 let homeFrom = null, tripCity = null, touring = false;
 
 function loadHome(){
@@ -2541,12 +2571,12 @@ function applyView(){
 /* ───────── 주행 ───────── */
 function run(){
   startTs = Date.now();
-  want = 0; pausedSec = 0; legNow = "";
+  want = startM; pausedSec = 0; legNow = "";
   sessStart = travelled; sessRest = 0; sessTunnel = 0; seenSigun = []; arrivedShown = false;
   startEvents();
   startQuotes();
   startPlaces();
-  jump(0);
+  jump(startM);
   timer = setInterval(tick, 500);
   document.addEventListener("visibilitychange", onHide);
 }
@@ -2561,7 +2591,7 @@ function tick(){
   $("#clock").textContent = fmt(Math.max(0, total - elapsed));
 
   if (Date.now() < pausedUntil) return;              // 정차 중
-  want = Math.min(totalM, distAt(elapsed - pausedSec));
+  want = Math.min(totalM, startM + distAt(elapsed - pausedSec));
   if (want - travelled >= STEP_M || (want >= totalM && travelled < totalM)) jump(want);
 
   if (want >= totalM && !arrivedShown){
