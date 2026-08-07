@@ -326,7 +326,7 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
 </div>
 
 <div class="wrap" id="setup" style="display:none">
-  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v22</span></p>
+  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v24</span></p>
   <div id="dots"></div>
 
   <section class="step" data-step="1">
@@ -716,12 +716,28 @@ function init(){
   function renderModes(){
     renderLoop();
     const box = $("#modes"); box.innerHTML = "";
-    const flightPart = travelEndM > 0 && groundM > 0 && startM < groundM;
+    const info = $("#modeInfo");
+
+    /* 지금부터가 비행/배 구간이면 고를 것이 없다 */
+    const airAhead = travelEndM > 0 && groundM > 0 && startM >= groundM - 100 && startM < travelEndM - 100;
+    if (airAhead){
+      const b = document.createElement("button");
+      b.className = "chip"; b.setAttribute("aria-pressed", "true");
+      b.innerHTML = (isBoat() ? "배" : "비행기") + `<br><small style="opacity:.6">${mode.kmh}km/h</small>`;
+      b.onclick = () => showStep(4);
+      box.appendChild(b);
+      if (info) info.textContent = depName + "에서 " + (to ? to.name : "도착지") + "까지 " +
+                                   (isBoat() ? "배로 갑니다" : "비행기로 갑니다");
+      return;
+    }
+
     let list;
-    if (tripKind === "local") list = ["walk","run","bike","car"];
-    else if (tripKind === "abroad") list = startM >= travelEndM ? ["walk","run"] : ["car"];
-    else list = startM >= travelEndM ? ["walk","run"] : ["walk","car"];
-    list.map(id => MODES.find(m => m.id === id)).forEach(m => {
+    if (loopMode) list = ["walk","run","bike","car"];
+    else if (startM >= travelEndM - 100 && travelEndM > 0) list = ["walk","run","bike"];
+    else if (tripKind === "abroad") list = ["car"];
+    else list = ["walk","car"];
+
+    list.map(id => MODES.find(m => m.id === id)).filter(Boolean).forEach(m => {
       const b = document.createElement("button");
       b.className = "chip"; b.innerHTML = `${m.name}<br><small style="opacity:.6">${m.kmh}km/h</small>`;
       b.setAttribute("aria-pressed", mode.id === m.id);
@@ -733,9 +749,10 @@ function init(){
       };
       box.appendChild(b);
     });
-    $("#modeInfo").textContent =
-      startM >= travelEndM && travelEndM > 0 ? "도착해서 걸어 다닐 방법이야"
-      : tripKind === "abroad" ? (flightPart ? depName + "까지는 이걸로, 그 뒤엔 비행기" : "이걸로 갈게")
+
+    if (info) info.textContent =
+      (startM >= travelEndM - 100 && travelEndM > 0) ? "도착해서 걸어 다닐 방법이야"
+      : tripKind === "abroad" ? depName + "까지는 이걸로, 그 뒤엔 비행기"
       : "";
   }
 
@@ -1783,7 +1800,7 @@ function applyName(n){
   loadHome();
   $("#intro").style.display = "none";
   $("#setup").style.display = "flex";
-  $("#brand").innerHTML = '창밖 여행 <span id="ver">v22</span>';
+  $("#brand").innerHTML = '창밖 여행 <span id="ver">v24</span>';
   if (window.showStep) window.showStep(1);
   if (window.renderKinds) window.renderKinds();
   const q1 = $("#q1"); if (q1) q1.innerHTML = voc(NAME) + ",<br>오늘 어디 가고 싶어?";
@@ -1873,6 +1890,8 @@ function startQuotes(){
 /* ───────── 출발 ───────── */
 async function begin(){
   rateTouched = false;
+  miniWorld = null; miniWline = null; miniWdot = null;
+  miniWorld = null; miniWline = null; miniWdot = null;
   satKakao = null; satLeaf = null; satRoute = null; satDone = null;
   leafRoute = null; leafDone = null; chevrons = [];
   $("#sat").innerHTML = "";
@@ -2334,7 +2353,53 @@ function fitMini(){
   mini.setBounds(b, 14, 14, 14, 14);
 }
 
+let miniWorld = null, miniWline = null, miniWdot = null;
+
+/* 해외 여정이면 작은 지도를 세계 지도로 (항로 전체가 보이게) */
+function buildMiniWorld(){
+  if (miniWorld || typeof L === "undefined") return false;
+  $("#mini").innerHTML = "";
+  miniWorld = L.map($("#mini"), { zoomControl:false, attributionControl:false, dragging:false,
+                                  scrollWheelZoom:false, doubleClickZoom:false, keyboard:false });
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom:8, minZoom:1 }).addTo(miniWorld);
+  const pts = path.filter((_,i) => i % Math.max(1, Math.ceil(path.length/400)) === 0)
+                  .map(q => [q.lat, q.lng]);
+  L.polyline(pts, { color:"#C08A50", weight:2, opacity:.75, dashArray:"4 5" }).addTo(miniWorld);
+  miniWline = L.polyline([], { color:"#E4572E", weight:3 }).addTo(miniWorld);
+  L.circleMarker([to.lat, to.lng], { radius:4, color:"#0C1719", weight:2,
+                                     fillColor:"#7FD4C1", fillOpacity:1 }).addTo(miniWorld);
+  miniWdot = L.circleMarker([from.lat, from.lng], { radius:4, color:"#fff", weight:2,
+                                     fillColor:"#E4572E", fillOpacity:1 }).addTo(miniWorld);
+  miniWorld.fitBounds(L.latLngBounds(pts), { padding:[12,12] });
+  [0,150,500].forEach(t => setTimeout(() => { try { miniWorld.invalidateSize();
+    miniWorld.fitBounds(L.latLngBounds(pts), { padding:[12,12] }); } catch(e){} }, t));
+  return true;
+}
+
 function buildMap(){
+  if (to && !inKorea(to) && typeof L !== "undefined"){
+    if (buildMiniWorld()){
+      $("#mini").style.display = "";
+      $("#swap").onclick = () => {
+        const ring = roadOK() ? ["map","road"] : ["map"];
+        viewMode = ring[(ring.indexOf(viewMode) + 1) % ring.length];
+        applyView();
+      };
+      $("#msgbtn").onclick = () => {
+        quoteOn = !quoteOn;
+        $("#msgbtn").style.opacity = quoteOn ? "1" : ".4";
+        if (!quoteOn) $("#quote").classList.remove("on");
+      };
+      $("#tune").onclick = toggleMusic;
+      $("#mini").onclick = () => {
+        $("#mini").classList.toggle("big");
+        setTimeout(() => { try { miniWorld.invalidateSize(); } catch(e){} }, 320);
+      };
+      applyView();
+      bindHold();
+      return;
+    }
+  }
   if (isPlane() && groundM === 0){
     $("#ride").className = "plane";
     buildWorldMap();
@@ -3447,7 +3512,11 @@ function jumpInner(m){
   if (sp){ sp.seen = true; showSpot(sp); }
   if (viewMode === "road") roadStep(p);
   faceAvatar(p.pan);
-  if (wdot && wline){
+  if (miniWorld && miniWdot){
+    miniWdot.setLatLng([p.lat, p.lng]);
+    if (miniWline) miniWline.setLatLngs(
+      path.filter((q,i) => cum[i] <= m && i % 6 === 0).map(q => [q.lat, q.lng]).concat([[p.lat, p.lng]]));
+  } else if (wdot && wline){
     wdot.setLatLng([p.lat, p.lng]);
     wline.setLatLngs(path.filter((q,i) => cum[i] <= m && i % 4 === 0).map(q => [q.lat, q.lng]).concat([[p.lat, p.lng]]));
   } else if (mini && miniDot){
