@@ -104,9 +104,6 @@ const NAVER_KEY = "";
   #tripList button{height:56px;border-radius:12px;border:1px solid var(--line);background:var(--panel);
     color:var(--paper);font-size:14px;font-family:inherit;line-height:1.4}
   #tripList button small{display:block;font-size:11px;color:var(--dim);margin-top:3px}
-  #skips{display:flex;gap:8px;margin-top:12px}
-  #skips button{flex:1;height:48px;border-radius:11px;border:1px solid var(--line);
-    background:#101F21;color:#8FA9A4;font-size:13px;font-family:inherit;border-radius:11px;border:1px solid var(--line)}
   #around{width:100%;height:52px;margin-top:16px;border-radius:12px;border:1px solid var(--line);
     background:var(--panel);color:var(--mint);font-size:15px;font-family:inherit}
   #around:disabled{opacity:.5}
@@ -127,6 +124,12 @@ const NAVER_KEY = "";
   #road{position:absolute;inset:0;display:none;background:#0B0E11;z-index:1}
   #sat:after{content:"";position:absolute;inset:0;pointer-events:none;
     background:radial-gradient(ellipse 44% 64% at 50% 46%, #0000 0 66%, #101418 74%, #0B0E11 100%)}
+  #jump{position:absolute;right:14px;bottom:112px;z-index:8;display:none;align-items:center;gap:8px;
+    height:52px;padding:0 18px 0 15px;border-radius:26px;border:1px solid #ffffff44;
+    background:#0C1719D9;color:#F2EFE6;font-size:15px;font-family:inherit;backdrop-filter:blur(8px);
+    box-shadow:0 6px 18px #0007}
+  #jump span{font-size:17px;color:var(--dawn)}
+  #jump b{font-weight:600;max-width:46vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #satzoom{position:absolute;right:12px;top:44%;display:flex;flex-direction:column;gap:10px;z-index:5}
   #satzoom button{width:52px;height:52px;border-radius:14px;border:1px solid #ffffff55;
     background:#00000066;color:#FFFFFF;font-size:24px;font-family:inherit;backdrop-filter:blur(6px)}
@@ -197,6 +200,7 @@ const NAVER_KEY = "";
   #meta{display:flex;justify-content:space-between;font-size:13px;color:#CFE0DC;margin-bottom:12px;
        text-shadow:0 1px 4px #000}
   #ctrl{display:flex;gap:8px}
+  #ctrl #msgbtn,#ctrl #tune,#ctrl #swap{width:52px;padding:0;font-size:17px}
   #ctrl button{height:44px;padding:0 12px;border-radius:10px;border:1px solid #ffffff33;background:#00000055;color:#DCE8E5;
        font-size:13px;font-family:inherit;backdrop-filter:blur(6px)}
   #stop{flex:1;position:relative;overflow:hidden}
@@ -351,6 +355,7 @@ const NAVER_KEY = "";
     <div id="where"><small><span id="wx">·</span></small><span id="region">출발 준비</span></div>
     <div id="clock" class="mono">00:00</div>
   </div>
+  <button id="jump"><span>⏭</span><b></b></button>
   <div id="banner"><b></b><em></em></div>
   <div id="place"></div>
   <div id="quote"></div>
@@ -358,10 +363,9 @@ const NAVER_KEY = "";
   <div id="bar">
     <div id="meta"><span id="next"></span><span id="left" class="mono"></span></div>
     <div id="ctrl">
-      <button id="jump">건너뛰기</button>
-      <button id="msgbtn">문구 켬</button>
-      <button id="tune">♪ 켬</button>
-      <button id="swap">그림</button>
+      <button id="msgbtn" title="응원 문구">💬</button>
+      <button id="tune" title="음악">♪</button>
+      <button id="swap" title="화면 바꾸기">🗺</button>
       <button id="stop"><i></i><span>길게 눌러 중단</span></button>
     </div>
   </div>
@@ -952,7 +956,7 @@ function stopMusic(){
 function toggleMusic(){
   music = !music;
   music ? startMusic() : stopMusic();
-  $("#tune").textContent = music ? "♪ 켬" : "♪ 끔";
+  $("#tune").style.opacity = music ? "1" : ".4";
 }
 
 /* ═══════════ 도착지 구경 ═══════════ */
@@ -1661,12 +1665,12 @@ function buildMap(){
   };
   $("#msgbtn").onclick = () => {
     quoteOn = !quoteOn;
-    $("#msgbtn").textContent = quoteOn ? "문구 켬" : "문구 끔";
+    $("#msgbtn").style.opacity = quoteOn ? "1" : ".4";
     if (!quoteOn) $("#quote").classList.remove("on");
   };
-  $("#msgbtn").textContent = quoteOn ? "문구 켬" : "문구 끔";
+  $("#msgbtn").style.opacity = quoteOn ? "1" : ".4";
   $("#tune").onclick = toggleMusic;
-    $("#tune").textContent = music ? "♪ 켬" : "♪ 끔";
+    $("#tune").style.opacity = music ? "1" : ".4";
     $("#mini").onclick = () => {
       $("#mini").classList.toggle("big");
       setTimeout(() => { wmap.invalidateSize(); wmap.fitBounds(wmap._routeBounds || wmap.getBounds()); }, 320);
@@ -1706,12 +1710,12 @@ function buildMap(){
   };
   $("#msgbtn").onclick = () => {
     quoteOn = !quoteOn;
-    $("#msgbtn").textContent = quoteOn ? "문구 켬" : "문구 끔";
+    $("#msgbtn").style.opacity = quoteOn ? "1" : ".4";
     if (!quoteOn) $("#quote").classList.remove("on");
   };
-  $("#msgbtn").textContent = quoteOn ? "문구 켬" : "문구 끔";
+  $("#msgbtn").style.opacity = quoteOn ? "1" : ".4";
   $("#tune").onclick = toggleMusic;
-  $("#tune").textContent = music ? "♪ 켬" : "♪ 끔";
+  $("#tune").style.opacity = music ? "1" : ".4";
   document.querySelectorAll("#satzoom button").forEach(b => {
     b.onclick = () => { satAdj += (+b.dataset.z); put("ride:zoom", String(satAdj)); };
   });
@@ -2596,8 +2600,7 @@ function applyView(){
   $("#scene").style.display = sceneOn ? "block" : "none";
   $("#sat").style.display   = satOn ? "block" : "none";
   $("#satzoom").style.display = (viewMode === "map") ? "flex" : "none";
-  $("#swap").textContent = viewMode === "map" ? ((hasNaver() && !isPlane()) ? "거리뷰" : "그림")
-    : viewMode === "road" ? "그림" : "지도";
+  $("#swap").textContent = viewMode === "map" ? "🖼" : "🗺";
   if (satOn){
     buildSat();
     setTimeout(() => {
@@ -2731,8 +2734,8 @@ function jumpInner(m){
   const jb = $("#jump");
   if (jb){
     const t = nextStop();
-    jb.textContent = t ? "⏭ " + (t.name.length > 6 ? t.name.slice(0,6) + "…" : t.name) : "⏭";
-    jb.style.display = t ? "" : "none";
+    if (t){ jb.style.display = "flex"; jb.querySelector("b").textContent = t.name + " 로 건너뛰기"; }
+    else jb.style.display = "none";
   }
   const tag = nx ? ({rest:"휴게소", tunnel:"터널", bridge:"다리", spot:""})[nx.kind] : "";
   $("#next").textContent = nx ? `다음 ${tag} · ${nx.name}` : `${to.name}까지`;
