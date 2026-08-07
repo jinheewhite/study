@@ -100,6 +100,9 @@ const NAVER_KEY = "";
     background:var(--panel);color:#8FA9A4}
   #nav #next{background:var(--dawn);color:var(--ink);border:0;font-weight:700}
   #nav #next:disabled{opacity:.3}
+  #around{width:100%;height:52px;margin-bottom:14px;border-radius:12px;border:1px solid var(--line);
+    background:var(--panel);color:var(--mint);font-size:15px;font-family:inherit}
+  #around:disabled{opacity:.5}
   #here{width:100%;height:54px;margin-bottom:4px;border-radius:12px;border:1px solid var(--mint);
     background:#0F2320;color:var(--mint);font-size:16px;font-family:inherit}
   #here:disabled{opacity:.5}
@@ -282,6 +285,7 @@ const NAVER_KEY = "";
   <section class="step" data-step="3">
     <h1>어디로 갈거니?</h1>
     <p class="tiny">가고 싶은 곳을 찾아서 눌러줘</p>
+    <button id="around">🗺  여기 있는 곳을 둘러볼래</button>
     <input id="qTo" placeholder="예: 서울역 · 비행기면 도쿄, 파리" autocomplete="off">
     <div class="sug" id="sTo"></div>
   </section>
@@ -381,6 +385,7 @@ const MODES = [
   {id:"run",  name:"뛰기",   kmh:15},
   {id:"bike", name:"오토바이", kmh:60},
   {id:"car",  name:"자동차", kmh:85},
+  {id:"boat", name:"배",     kmh:45},
   {id:"plane",name:"비행기", kmh:850},
 ];
 const TIMES = [25, 60, 90, 120];
@@ -413,7 +418,7 @@ function chips(sel, list, get, set){
     box.appendChild(b);
   });
 }
-chips("#modes", MODES.filter(m => m.id !== "plane").map(m=>({label:`${m.name} ${m.kmh}km/h`, value:m})),
+chips("#modes", MODES.filter(m => m.id !== "plane" && m.id !== "boat").map(m=>({label:`${m.name} ${m.kmh}km/h`, value:m})),
       ()=>mode, v=>{ mode = v; check(); });
 chips("#times", TIMES.map(t=>({label:t+"분", value:t})), ()=>minutes, v=>minutes=v);
 const VIEWS = [{label:"지도",value:"map"},{label:"그림 풍경",value:"draw"}];
@@ -532,20 +537,25 @@ function init(){
     });
   });
 
+  $("#around").onclick = async () => {
+    const b = $("#around");
+    if (!from){ $("#warn").textContent = "먼저 출발할 곳을 정해줘"; return; }
+    b.disabled = true; b.textContent = "둘러볼 곳을 찾는 중…";
+    const spot = await pickSpotNear(from);
+    b.disabled = false; b.textContent = "🗺  여기 있는 곳을 둘러볼래";
+    if (!spot){ $("#warn").textContent = "둘러볼 곳을 못 찾았어 · 다른 곳에서 해보자"; return; }
+    to = spot;
+    $("#qTo").value = spot.name;
+    $("#sTo").innerHTML = "";
+    mode = MODES.find(m => m.id === "walk");
+    await check();
+    if (window.showStep) window.showStep(4);
+  };
+
   $("#tourMore").onclick = async () => {
     const b = $("#tourMore");
     b.textContent = "둘러볼 곳을 찾는 중…";
-    const list = tourList.length ? tourList : await landmarks(to.lat, to.lng);
-    if (!list.length){ b.textContent = "둘러볼 곳을 못 찾았어요"; return; }
-    const spot = list[Math.floor(Math.random() * list.length)];
-    let hit = null;
-    try {
-      const g = await fetch(`https://ko.wikipedia.org/w/api.php?action=query&titles=`
-        + encodeURIComponent(spot.title) + `&prop=coordinates&format=json&origin=*`);
-      const j = await g.json();
-      const c = Object.values(j.query.pages)[0]?.coordinates?.[0];
-      if (c) hit = { name: spot.title, lat: c.lat, lng: c.lon };
-    } catch(e){}
+    const hit = await pickSpotNear(to);
     if (!hit){ b.textContent = "둘러볼 곳을 못 찾았어요"; return; }
 
     from = { name: to.name, lat: to.lat, lng: to.lng };
@@ -585,7 +595,7 @@ function bindSearch(inputSel, listSel, pick, which){
     const q = inp.value.trim();
     if (q.length < 2){ box.innerHTML = ""; return; }
     t = setTimeout(async () => {
-      if (which === "to"){
+      {
         box.innerHTML = "";
         let list = [];
         try { list = await worldSearch(q); } catch(e){}
@@ -900,6 +910,25 @@ async function landmarks(lat, lng){
   } catch(e){ return []; }
 }
 
+/* 주변 명소 하나를 골라 좌표까지 가져온다 */
+async function pickSpotNear(p){
+  const list = await landmarks(p.lat, p.lng);
+  if (!list.length) return null;
+  for (const cand of list.sort(() => Math.random() - .5)){
+    for (const lang of ["ko", "en"]){
+      try {
+        const u = `https://${lang}.wikipedia.org/w/api.php?action=query&titles=`
+                + encodeURIComponent(cand.title) + `&prop=coordinates&format=json&origin=*`;
+        const j = await (await fetch(u)).json();
+        const c = Object.values(j.query.pages)[0]?.coordinates?.[0];
+        if (c && metres(p, { lat:c.lat, lng:c.lon }) > 300)
+          return { name: cand.title, lat: c.lat, lng: c.lon };
+      } catch(e){}
+    }
+  }
+  return null;
+}
+
 /* 다녀온 도시 앨범 */
 function saveCity(name){
   if (!name) return;
@@ -1008,6 +1037,9 @@ const EV = {
            "버스가 천천히 차선을 바꿉니다"],
   car:    ["라디오 주파수가 잠깐 지직거립니다", "속도를 조금 올렸습니다"],
   walk:   ["발밑에서 자갈 밟히는 소리가 납니다", "잠시 서서 숨을 골랐습니다"],
+  boat:   ["갈매기가 배를 따라옵니다", "파도에 배가 천천히 흔들립니다",
+           "수평선 말고는 아무것도 없습니다", "짠 바람이 얼굴에 닿습니다",
+           "엔진 소리가 낮게 울립니다", "저 멀리 섬 그림자가 보입니다"],
   bike:   ["내리막이라 페달을 멈췄습니다", "바람이 귀를 스칩니다"],
   plane:  ["구름 위를 지나고 있습니다", "날개 끝 등이 깜빡입니다",
            "저 아래 구름이 솜처럼 깔려 있습니다", "기내가 조용해졌습니다",
@@ -1349,9 +1381,10 @@ async function begin(){
 }
 
 async function loadRoute(){
-  if (isPlane()){
+  if (isPlane() || isBoat()){
     groundM = 0;
-    const dep = inKorea(to) ? nearestAirport(from) : INCHEON;   // 국내선은 가까운 공항
+    const dep = isBoat() ? nearestPort(from)
+              : inKorea(to) ? nearestAirport(from) : INCHEON;   // 국내선은 가까운 공항
     depName = dep.name;
     const air = flightPath({ lat:dep.lat, lng:dep.lng }, to);
     if (metres(from, dep) > 25000){               // 공항이 멀면 먼저 차로 간다
@@ -1543,12 +1576,17 @@ function countdown(){
 
 /* ═══════════ 해외 · 비행 ═══════════ */
 const isPlane = () => mode.id === "plane";
+const isBoat  = () => mode.id === "boat";
 const inKorea = (p) => p.lat > 33 && p.lat < 38.7 && p.lng > 124.5 && p.lng < 131.9;
 
 /* 거리를 보고 알아서 고른다 — 가까우면 걷기, 멀면 자가용, 아주 멀거나 해외면 비행기 */
 function autoMode(){
   if (!from || !to) return;
   const d = metres(from, to) / 1000;
+  if (needsBoat(to) && !needsBoat(from)){
+    mode = MODES.find(m => m.id === "boat");
+    return;
+  }
   const mustFly = !inKorea(to) || d > 900 || isIsland(to) !== isIsland(from);
   if (mustFly) mode = MODES.find(m => m.id === "plane");
   else if (isPlane()) mode = MODES.find(m => m.id === "car");   // 국내로 돌아오면 자동차
@@ -1569,8 +1607,21 @@ const AIRPORTS = [
 const nearestAirport = (p) =>
   AIRPORTS.reduce((a, b) => metres(p, b) < metres(p, a) ? b : a, AIRPORTS[0]);
 
+/* 여객선 항구 — 공항이 없는 섬은 배로 갑니다 */
+const PORTS = [
+  { name:"강릉항",   lat:37.7726, lng:128.9500 },
+  { name:"묵호항",   lat:37.5500, lng:129.1170 },
+  { name:"포항여객선터미널", lat:36.0400, lng:129.3830 },
+  { name:"후포항",   lat:36.6800, lng:129.4560 },
+];
+const nearestPort = (p) =>
+  PORTS.reduce((a, b) => metres(p, b) < metres(p, a) ? b : a, PORTS[0]);
+
+/* 배로만 갈 수 있는 섬 (울릉도·독도) */
+const needsBoat = (p) => p.lat > 37.2 && p.lng > 130.5;
+
 /* 섬이라 길이 없는 곳 */
-const isIsland = (p) => p.lat < 33.65 || (p.lat > 37.4 && p.lng > 130.7);
+const isIsland = (p) => p.lat < 33.65 || needsBoat(p);
 let wmap = null, wline = null, wdot = null, lastGeoAt = -1e9;
 
 /* 전 세계 도시 검색 (Open-Meteo, 키 없음) */
@@ -1853,6 +1904,21 @@ function girlSVG(fast){
   </g></svg>`;
 }
 
+function boatSVG(){
+  return `<svg viewBox="-14 -18 28 20" xmlns="http://www.w3.org/2000/svg">
+    <g><animateTransform attributeName="transform" type="rotate" values="-2.5 0 0;2.5 0 0;-2.5 0 0"
+        dur="2.6s" repeatCount="indefinite"/>
+    <path d="M-10 -3 L10 -3 L7.4 1.4 L-7.4 1.4 Z" fill="#E9EEE9" stroke="#26302F" stroke-width=".6"/>
+    <rect x="-6.6" y="-8.4" width="11" height="5.4" rx="1" fill="#F4F7F4" stroke="#26302F" stroke-width=".5"/>
+    <rect x="-5.2" y="-7.2" width="2.2" height="1.9" fill="#7FB4C4"/>
+    <rect x="-2.2" y="-7.2" width="2.2" height="1.9" fill="#7FB4C4"/>
+    <rect x="0.8" y="-7.2" width="2.2" height="1.9" fill="#7FB4C4"/>
+    <rect x="-1.6" y="-12.6" width="1.2" height="4.2" fill="#8C949A"/>
+    <path d="M-0.4 -12.4 L4.6 -11 L-0.4 -9.6 Z" fill="#E4572E"/>
+    <path d="M-12 2 q3 -1.4 6 0 t6 0 t6 0" stroke="#7FB4C4" stroke-width="1.1" fill="none" opacity=".8"/>
+    </g></svg>`;
+}
+
 function bikeSVG(){
   return `<svg viewBox="-13 -16 26 18" xmlns="http://www.w3.org/2000/svg">
     <ellipse cy="0.7" rx="6.5" ry="1.2" fill="#000" opacity=".26"/>
@@ -1892,7 +1958,8 @@ function setAvatar(){
   const on = (viewMode === "map");
   el.style.display = on ? "block" : "none";
   if (!on) return;
-  const art = flying() ? planeSVG()
+  const art = (flying() && isBoat()) ? boatSVG()
+    : flying() ? planeSVG()
     : (mode.id === "walk" || mode.id === "run") ? girlSVG(mode.id === "run")
     : mode.id === "bike" ? bikeSVG() : carSVG();
   el.innerHTML = art + (NAME ? `<b>${esc(NAME)}</b>` : "");
@@ -1909,14 +1976,14 @@ function faceAvatar(pan){
 /* ── 네이버 거리뷰 ── */
 let pano = null, panoAt = -1e9;
 let groundM = 0, want = 0, pausedSec = 0, legNow = "", depName = "공항";
-const speedKmh = (d) => (isPlane() && d < groundM) ? 85 : mode.kmh;
-const flying = () => isPlane() && travelled >= groundM;   // 공항을 지났는가
+const speedKmh = (d) => ((isPlane() || isBoat()) && d < groundM) ? 85 : mode.kmh;
+const flying = () => (isPlane() || isBoat()) && travelled >= groundM;   // 공항·항구를 지났는가
 
 /* 출발 후 el 초가 지났을 때 가야 할 거리(m) */
 function distAt(el){
   if (el <= 0) return 0;
-  if (!isPlane() || groundM <= 0) return (mode.kmh * 1000 / 3600) * el;
-  const gv = 85 * 1000 / 3600;              // 공항까지는 자동차
+  if ((!isPlane() && !isBoat()) || groundM <= 0) return (mode.kmh * 1000 / 3600) * el;
+  const gv = 85 * 1000 / 3600;              // 공항·항구까지는 자동차
   const gt = groundM / gv;                   // 공항 도착까지 걸리는 초
   if (el <= gt) return gv * el;
   return groundM + (mode.kmh * 1000 / 3600) * (el - gt);
@@ -2377,13 +2444,13 @@ function jumpInner(m){
   const p = at(m);
   const pos = new kakao.maps.LatLng(p.lat, p.lng);
 
-  if (isPlane()){
+  if (isPlane() || isBoat()){
     const leg = (m < groundM) ? "car" : "air";
     if (leg !== legNow){
       legNow = leg;
       setAvatar();
       if (leg === "air"){
-        if (groundM > 0) banner(depName, "이제 비행기를 탑니다");
+        if (groundM > 0) banner(depName, isBoat() ? "이제 배를 탑니다" : "이제 비행기를 탑니다");
 
       }
     }
