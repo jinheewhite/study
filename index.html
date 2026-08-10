@@ -334,7 +334,7 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
 </div>
 
 <div class="wrap" id="setup" style="display:none">
-  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v45</span></p>
+  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v46</span></p>
   <div id="dots"></div>
 
   <section class="step" data-step="1">
@@ -367,7 +367,9 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
     <p class="tiny" id="modeInfo"></p>
     <div class="chips" id="modes"></div>
     <div id="loopWrap" style="display:none">
-      <p class="tiny" style="margin-top:22px">얼마나 돌까?</p>
+      <p class="tiny" style="margin-top:22px" id="paceLabel">얼마나 빠르게?</p>
+      <div class="chips" id="loopPace"></div>
+      <p class="tiny" style="margin-top:20px">얼마나 돌까?</p>
       <div class="chips" id="loopKms"></div>
     </div>
   </section>
@@ -760,14 +762,40 @@ function init(){
   const fmtMin = (m) => m < 60 ? m + "분"
     : (m % 60 ? Math.floor(m/60) + "시간 " + (m%60) + "분" : Math.floor(m/60) + "시간");
 
+  const PACES = {
+    walk: [["천천히", 3], ["보통", 4], ["빠르게", 5.5]],
+    run:  [["가볍게", 8], ["보통", 11], ["빠르게", 14]],
+    bike: [["천천히", 30], ["보통", 60]],
+    car:  [["동네길", 40], ["보통", 60], ["빠르게", 85]],
+  };
+
   function renderLoop(){
     const w = $("#loopWrap");
     w.style.display = loopMode ? "block" : "none";
     if (!loopMode) return;
+
+    const list = PACES[mode.id] || [["보통", mode.kmh]];
+    if (!pace || !list.some(x => x[1] === pace)) pace = list[Math.min(1, list.length-1)][1];
+
+    const pb = $("#loopPace"); pb.innerHTML = "";
+    $("#paceLabel").textContent = (mode.id === "walk") ? "얼마나 빠르게 걸을래?"
+      : (mode.id === "run") ? "얼마나 빠르게 뛸래?" : "얼마나 빠르게?";
+    list.forEach(([n, v]) => {
+      const b = document.createElement("button");
+      b.className = "chip";
+      b.innerHTML = `${n}<br><small style="opacity:.6">${v}km/h</small>`;
+      b.setAttribute("aria-pressed", pace === v);
+      b.onclick = async () => { pace = v; await check(); renderLoop(); };
+      pb.appendChild(b);
+    });
+
     const box = $("#loopKms"); box.innerHTML = "";
     [3, 5, 10, 20].forEach(k => {
+      const mins = Math.round(k / (pace || mode.kmh) * 60);
       const b = document.createElement("button");
-      b.className = "chip"; b.textContent = k + "km";
+      b.className = "chip";
+      b.innerHTML = `${k}km<br><small style="opacity:.6">${mins < 60 ? mins + "분"
+        : Math.floor(mins/60) + "시간" + (mins % 60 ? " " + (mins%60) + "분" : "")}</small>`;
       b.setAttribute("aria-pressed", loopKm === k);
       b.onclick = async () => { loopKm = k; await check(); renderLoop(); };
       box.appendChild(b);
@@ -808,7 +836,7 @@ function init(){
       b.setAttribute("aria-pressed", mode.id === m.id);
       b.onclick = async () => {
         mode = m;
-        if (loopMode) loopKm = (m.id === "walk") ? 3 : (m.id === "run") ? 5 : 10;
+        if (loopMode){ pace = 0; loopKm = (m.id === "walk") ? 3 : (m.id === "run") ? 5 : 10; }
         await check(); renderModes();
         if (!loopMode) setTimeout(() => showStep(4), 220);
       };
@@ -1924,7 +1952,7 @@ function applyName(n){
   loadHome();
   $("#intro").style.display = "none";
   $("#setup").style.display = "flex";
-  $("#brand").innerHTML = '창밖 여행 <span id="ver">v45</span>';
+  $("#brand").innerHTML = '창밖 여행 <span id="ver">v46</span>';
   if (window.showStep) window.showStep(1);
   if (window.renderKinds) window.renderKinds();
   const q1 = $("#q1"); if (q1) q1.innerHTML = voc(NAME) + ",<br>오늘 어디 가고 싶어?";
@@ -2019,7 +2047,7 @@ async function loadRoute(){
   /* ── 동네 한 바퀴 ── */
   if (loopMode){
     const loop = await loopPath(from, loopKm);
-    push(loop, mode.kmh, mode.id);
+    push(loop, pace || mode.kmh, mode.id);
     travelEndM = 0;
     path = [].concat(...seg);
     finishRoute();
