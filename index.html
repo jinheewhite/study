@@ -334,7 +334,7 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
 </div>
 
 <div class="wrap" id="setup" style="display:none">
-  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v48</span></p>
+  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v50</span></p>
   <div id="dots"></div>
 
   <section class="step" data-step="1">
@@ -501,6 +501,7 @@ const gapOf = (key, lo, hi) => {
   const v = TM[key] || [lo, hi];
   return (v[0] * 1000) + Math.random() * ((v[1] - v[0]) * 1000);
 };
+const STRIDE = { walk: 0.7, run: 1.1 };   // 보폭(m)
 const RATES = [{n:"실시간",v:1},{n:"2배",v:2},{n:"3배",v:3},{n:"5배",v:5},{n:"미리보기",v:60}];
 const STEP_M = 45;          // (옛 값 · 아래 stepM() 을 씁니다)
 /* 위치를 얼마나 자주 갱신할지 — 느리게 갈수록 촘촘하게 */
@@ -763,7 +764,7 @@ function init(){
     : (m % 60 ? Math.floor(m/60) + "시간 " + (m%60) + "분" : Math.floor(m/60) + "시간");
 
   /* 걷기·뛰기는 시간당 걸음 수로 고릅니다 (보폭 걷기 0.7m · 뛰기 1.1m) */
-  const STRIDE = { walk: 0.7, run: 1.1 };
+
   const PACES = {
     walk: [["4,000보", 2.8], ["5,000보", 3.5], ["8,000보", 5.6], ["10,000보", 7.0]],
     run:  [["6,000보", 6.6], ["8,000보", 8.8], ["10,000보", 11.0], ["12,000보", 13.2]],
@@ -803,7 +804,15 @@ function init(){
       b.innerHTML = `${k}km<br><small style="opacity:.6">${tTxt}` +
         (steps ? `<br>약 ${steps.toLocaleString()}보` : "") + `</small>`;
       b.setAttribute("aria-pressed", loopKm === k);
-      b.onclick = async () => { loopKm = k; await check(); renderLoop(); };
+      b.onclick = async () => {
+        loopKm = k;
+        await check();
+        renderLoop();
+        minutes = Math.max(5, Math.round(totalM / 1000 / (pace || mode.kmh) * 60));
+        rate = 1; rateTouched = true;
+        refresh();
+        setTimeout(() => showStep(5), 240);
+      };
       box.appendChild(b);
     });
   }
@@ -878,11 +887,16 @@ function init(){
     $("#setup").classList.toggle("mid", step < STEPS);
     if (step >= 4) refresh();
     if (step === 2 && loopMode){ showStep(3); return; }
+    if (step === 4 && loopMode){ showStep(5); return; }
     if (step === 2) renderStart();
     if (step === 3) renderModes();
     if (step === 4) renderTimes();
     if (step === STEPS){
       const mm = $("#mm"); if (mm) mm.textContent = minutes;
+      const q6 = $("#q6");
+      if (q6) q6.textContent = loopMode
+        ? (shortName(from && from.name) + " 한 바퀴 걷자!")
+        : "우리 출발할까?";
     }
     window.scrollTo(0, 0);
   }
@@ -1283,9 +1297,13 @@ function refresh(){
   const wayTxt = loopMode ? (shortName(from && from.name) + " 한 바퀴") : touring ? `${from.name} 둘러보기` : `${from.name} → ${to.name}`;
   $("#plan").innerHTML =
     `<b>${esc(wayTxt)}</b><br>` +
-    `${mode.name}로 <u>${km.toFixed(0)}km</u> · ` +
-    (runs <= 1 ? `오늘 <u>${minutes}분</u>이면 도착` : `집중 <u>${runs}번</u>이면 도착`) +
-    (loopMode ? `<br>돌고 나면 <u>${shortName(from.name)}</u> 로 돌아와` :
+    (loopMode
+      ? `${mode.name}로 <u>${km.toFixed(1)}km</u>` +
+        (STRIDE[mode.id] ? ` · 약 <u>${Math.round(km*1000/STRIDE[mode.id]/100)*100}보</u>` : "") +
+        `<br><u>${minutes}분</u>이면 제자리로 돌아와`
+      : `${mode.name}로 <u>${km.toFixed(0)}km</u> · ` +
+        (runs <= 1 ? `오늘 <u>${minutes}분</u>이면 도착` : `집중 <u>${runs}번</u>이면 도착`)) +
+    (loopMode ? "" :
      spots.length > 1 ? `<br>도착하면 명소 <u>${spots.length}곳</u>을 걸어서 둘러봐` : "");
 }
 
@@ -1958,7 +1976,7 @@ function applyName(n){
   loadHome();
   $("#intro").style.display = "none";
   $("#setup").style.display = "flex";
-  $("#brand").innerHTML = '창밖 여행 <span id="ver">v48</span>';
+  $("#brand").innerHTML = '창밖 여행 <span id="ver">v50</span>';
   if (window.showStep) window.showStep(1);
   if (window.renderKinds) window.renderKinds();
   const q1 = $("#q1"); if (q1) q1.innerHTML = voc(NAME) + ",<br>오늘 어디 가고 싶어?";
