@@ -98,6 +98,10 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
     background:var(--panel);color:#8FA9A4}
   #nav #next{background:var(--dawn);color:var(--ink);border:0;font-weight:700}
   #nav #next:disabled{opacity:.3}
+  #homeLoop{width:100%;height:48px;margin-bottom:12px;border-radius:12px;border:1px solid var(--line);
+    background:var(--panel);color:#8FA9A4;font-size:14px;font-family:inherit}
+  #hereLoop{width:100%;height:52px;margin-bottom:10px;border-radius:12px;border:1px solid var(--mint);
+    background:#0F2320;color:var(--mint);font-size:15px;font-family:inherit}
   #tripBtn{width:100%;height:54px;margin-top:12px;border-radius:12px;border:1px solid var(--dawn);
     background:#241C15;color:var(--dawn);font-size:16px;font-family:inherit}
   #tripList{display:none;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
@@ -153,6 +157,8 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
        letter-spacing:.05em;text-shadow:0 1px 6px #000}
   #avatar{position:absolute;left:50%;top:62%;transform:translate(-50%,-100%);pointer-events:none;
     z-index:6;display:none;width:74px;text-align:center}
+  #avatar.onroad svg{width:132px;height:132px}
+  #avatar.onroad b{font-size:14px}
   #avatar svg{width:74px;height:74px;display:block;filter:drop-shadow(0 4px 8px #0007)}
   #avatar b{display:block;margin-top:-4px;font-size:11px;font-weight:600;color:#fff;
     background:#E4572ECC;border-radius:999px;padding:3px 10px;text-shadow:0 1px 3px #0008}
@@ -328,13 +334,15 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
 </div>
 
 <div class="wrap" id="setup" style="display:none">
-  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v41</span></p>
+  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v45</span></p>
   <div id="dots"></div>
 
   <section class="step" data-step="1">
     <h1 id="q1">오늘 어디 가고 싶어?</h1>
     <div class="chips" id="kinds"></div>
     <div id="pickWrap" style="display:none">
+      <button id="hereLoop" style="display:none">📍  지금 내가 있는 곳</button>
+      <button id="homeLoop" style="display:none">🏠  우리 집 근처</button>
       <input id="qTo" placeholder="가고 싶은 곳" autocomplete="off">
       <div class="sug" id="sTo"></div>
       <div id="tripList"></div>
@@ -575,7 +583,18 @@ function init(){
   ps = new kakao.maps.services.Places();
   geo = new kakao.maps.services.Geocoder();
   bindSearch("#qFrom", "#sFrom", (p)=>{ saveHome(p); check(); }, "from");
-  bindSearch("#qTo",   "#sTo",   async (p)=>{ to = p; touring = false; loopMode = false; skipTouched = false; startM = 0; if (window.resetHome) window.resetHome(); if (window.closeTrips) window.closeTrips(); await check(); if (window.showStep) window.showStep(2); }, "to");
+  bindSearch("#qTo",   "#sTo",   async (p)=>{
+  if (tripKind === "local"){
+    loopMode = true; touring = false; skipTouched = false; startM = 0;
+    from = { name:p.name, lat:p.lat, lng:p.lng };
+    to   = { name:p.name, lat:p.lat, lng:p.lng };
+    mode = MODES.find(m => m.id === "walk"); loopKm = 3;
+    $("#qTo").value = p.name; $("#sTo").innerHTML = "";
+    await check();
+    if (window.showStep) window.showStep(3);
+    return;
+  }
+  to = p; touring = false; loopMode = false; skipTouched = false; startM = 0; if (window.resetHome) window.resetHome(); if (window.closeTrips) window.closeTrips(); await check(); if (window.showStep) window.showStep(2); }, "to");
   function useHere(){
     const b = $("#here");
     if (!navigator.geolocation){ b.textContent = "이 기기는 위치를 못 찾습니다"; return; }
@@ -621,17 +640,22 @@ function init(){
     $("#pickInfo").textContent = k.info;
     skipTouched = false; startM = 0;
     if (k.id === "local"){
-      $("#pickWrap").style.display = "none";
-      if (!homeFrom){ $("#warn").textContent = "먼저 집 위치를 정해줘"; showStep(2); return; }
       loopMode = true; touring = false;
-      from = { ...homeFrom };
-      to = { name: "우리 집", lat: homeFrom.lat, lng: homeFrom.lng };
-      mode = MODES.find(m => m.id === "walk"); loopKm = 3;
-      await check();
-      showStep(3);
+      $("#pickWrap").style.display = "block";
+      $("#hereLoop").style.display = "";
+      $("#homeLoop").style.display = homeFrom ? "" : "none";
+      $("#tripList").style.display = "none";
+      $("#qTo").placeholder = "돌고 싶은 동네 · 예: 서신동, 무녀도";
+      $("#qTo").value = ""; $("#sTo").innerHTML = "";
+      $("#pickInfo").textContent = "지금 있는 곳을 찾는 중…";
+      if (window.useHereLoop) window.useHereLoop(true);
       return;
     }
     loopMode = false;
+    $("#hereLoop").style.display = "none";
+    $("#homeLoop").style.display = "none";
+    $("#tripList").style.display = "grid";
+    $("#qTo").placeholder = "가고 싶은 곳";
     $("#pickWrap").style.display = "block";
     $("#qTo").value = ""; $("#sTo").innerHTML = "";
     to = null;
@@ -675,7 +699,7 @@ function init(){
   /* ── 어떻게 갈까 ── */
   function renderTimes(){
     const box = $("#times"); box.innerHTML = "";
-    const dest = loopMode ? ((from && from.name ? from.name + " " : "") + "한 바퀴") : (to ? to.name : "도착지");
+    const dest = loopMode ? (shortName(from && from.name) + " 한 바퀴") : (to ? to.name : "도착지");
     const info = $("#timeInfo");
 
     const mk = (mins, rt, sub, reach) => {
@@ -754,7 +778,7 @@ function init(){
     renderLoop();
     const q3 = $("#q3");
     if (q3) q3.textContent = loopMode
-      ? ((from && from.name ? from.name + " " : "") + "한 바퀴 — 어떻게 돌까?")
+      ? (shortName(from && from.name) + " 한 바퀴 — 어떻게 돌까?")
       : "어떻게 갈까?";
     const box = $("#modes"); box.innerHTML = "";
     const info = $("#modeInfo");
@@ -906,6 +930,46 @@ function init(){
     };
     tl.appendChild(b);
   }
+  window.useHereLoop = async (auto) => {
+    const b = $("#hereLoop");
+    const go = async (pt) => {
+      loopMode = true; touring = false;
+      from = { name: pt.name, lat: pt.lat, lng: pt.lng };
+      to = { name: pt.name, lat: pt.lat, lng: pt.lng };
+      mode = MODES.find(m => m.id === "walk"); loopKm = 3;
+      b.disabled = false; b.textContent = "📍  지금 내가 있는 곳";
+      $("#pickInfo").textContent = "";
+      await check();
+      showStep(3);
+    };
+    b.disabled = true; b.textContent = "위치를 찾는 중…";
+    if (!navigator.geolocation){ b.disabled = false; b.textContent = "📍  지금 내가 있는 곳"; $("#warn").textContent = "위치를 못 써 · 동네를 검색해줘"; return; }
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      const la = pos.coords.latitude, lo = pos.coords.longitude;
+      if (!geo){ await go({ name:"지금 있는 곳", lat:la, lng:lo }); return; }
+      geo.coord2Address(lo, la, async (res, st) => {
+        const a = (st === kakao.maps.services.Status.OK && res[0]) ? res[0].address : null;
+        const nm = a ? (a.region_3depth_name || a.region_2depth_name || "지금 있는 곳") : "지금 있는 곳";
+        await go({ name: nm, lat: la, lng: lo });
+      });
+    }, () => {
+      b.disabled = false; b.textContent = "📍  지금 내가 있는 곳";
+      $("#pickInfo").textContent = homeFrom
+        ? "위치를 못 잡았어 · 우리 집이나 검색으로 골라줘"
+        : "위치를 못 잡았어 · 돌고 싶은 동네를 검색해줘";
+    }, { enableHighAccuracy:false, timeout:8000, maximumAge:60000 });
+  };
+  $("#hereLoop").onclick = () => window.useHereLoop(false);
+
+  $("#homeLoop").onclick = async () => {
+    if (!homeFrom){ $("#warn").textContent = "집 위치가 아직 없어"; return; }
+    loopMode = true; touring = false;
+    from = { ...homeFrom }; to = { ...homeFrom };
+    mode = MODES.find(m => m.id === "walk"); loopKm = 3;
+    await check();
+    showStep(3);
+  };
+
   $("#fromBtn").onclick = () => {
     const w = $("#fromWrap");
     const open = w.style.display === "block";
@@ -1182,12 +1246,12 @@ function refresh(){
   const hrs  = km / eff;
   const time = hrs >= 1 ? `${Math.floor(hrs)}시간 ${Math.round((hrs%1)*60)}분` : `${Math.round(hrs*60)}분`;
   renderRates();
-  const wayTxt = loopMode ? ((from && from.name ? from.name + " " : "") + "한 바퀴") : touring ? `${from.name} 둘러보기` : `${from.name} → ${to.name}`;
+  const wayTxt = loopMode ? (shortName(from && from.name) + " 한 바퀴") : touring ? `${from.name} 둘러보기` : `${from.name} → ${to.name}`;
   $("#plan").innerHTML =
     `<b>${esc(wayTxt)}</b><br>` +
     `${mode.name}로 <u>${km.toFixed(0)}km</u> · ` +
     (runs <= 1 ? `오늘 <u>${minutes}분</u>이면 도착` : `집중 <u>${runs}번</u>이면 도착`) +
-    (loopMode ? `<br>돌고 나면 <u>${from.name}</u> 로 돌아와` :
+    (loopMode ? `<br>돌고 나면 <u>${shortName(from.name)}</u> 로 돌아와` :
      spots.length > 1 ? `<br>도착하면 명소 <u>${spots.length}곳</u>을 걸어서 둘러봐` : "");
 }
 
@@ -1822,6 +1886,14 @@ function showHome(){
   const q = $("#qFrom");    if (q) q.value = homeFrom.name;
   const fn = $("#fromNow"); if (fn) fn.textContent = homeFrom.name;
 }
+const shortName = (nm) => {
+  if (!nm) return "여기";
+  const t = String(nm).trim().split(/\s+/);
+  const last = t[t.length - 1];
+  if (/^\d/.test(last) && t.length > 1) return t[t.length - 2];   // 번지수는 버린다
+  return last.length > 12 ? last.slice(0, 12) : last;
+};
+
 function loadHome(){
   homeFrom = null;
   try {
@@ -1852,7 +1924,7 @@ function applyName(n){
   loadHome();
   $("#intro").style.display = "none";
   $("#setup").style.display = "flex";
-  $("#brand").innerHTML = '창밖 여행 <span id="ver">v41</span>';
+  $("#brand").innerHTML = '창밖 여행 <span id="ver">v45</span>';
   if (window.showStep) window.showStep(1);
   if (window.renderKinds) window.renderKinds();
   const q1 = $("#q1"); if (q1) q1.innerHTML = voc(NAME) + ",<br>오늘 어디 가고 싶어?";
@@ -2938,6 +3010,7 @@ function planeSVG(){
 function setAvatar(){
   const el = $("#avatar");
   const on = (viewMode === "map" || viewMode === "road");
+  el.classList.toggle("onroad", viewMode === "road");
   el.style.display = on ? "block" : "none";
   if (!on) return;
   const k = legs.length ? legAt(travelled) : mode.id;
@@ -2957,7 +3030,7 @@ function faceAvatar(pan){
 }
 
 /* ── 로드뷰 (국내만) ── */
-let rv = null, rvc = null, panoAt = -1e9, lastPano = null;
+let rv = null, rvc = null, panoAt = -1e9, lastPano = null, panoTime = 0;
 const roadOK = () => { const q = at(want); return inKorea(q); };
 
 function buildRoad(){
@@ -2970,7 +3043,9 @@ function roadStep(p){
   if (!rv || !rvc) return;
   const k = legs.length ? legAt(travelled) : mode.id;
   const step = (k === "walk") ? 8 : (k === "run") ? 15 : (k === "bike") ? 40 : 70;
-  if (Math.abs(travelled - panoAt) < step) return;
+  const now = Date.now();
+  if (Math.abs(travelled - panoAt) < step && now - panoTime < 9000) return;
+  panoTime = now;
   panoAt = travelled;
   const pos = new kakao.maps.LatLng(p.lat, p.lng);
   rvc.getNearestPanoId(pos, 90, (id) => {
@@ -3418,6 +3493,7 @@ function tick(){
     jb.querySelector("b").textContent = t ? t.name : "다른 곳 갈래";
   }
 
+  if (viewMode === "road"){ try { roadStep(at(want)); } catch(e){} }
   if (waitStart) return;                            // 도착해서 물어보는 중
   if (Date.now() < pausedUntil) return;              // 정차 중
   want = Math.max(want, Math.min(totalM, startM + distAt(elapsed - pausedSec)));
