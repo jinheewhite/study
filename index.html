@@ -276,6 +276,7 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
   #arrive .btns button{height:52px;border-radius:12px;font-size:15px;font-family:inherit;border:0}
   #arriveYes{background:var(--dawn);color:var(--ink);font-weight:700}
   #arriveLoop{background:#132523;border:1px solid var(--mint);color:var(--mint)}
+  #arriveHome{background:none;border:1px solid var(--line);color:#8FA9A4}
   #arriveNo{background:none;border:1px solid var(--line);color:#8FA9A4}
   #banner{position:absolute;left:0;right:0;top:38%;z-index:9;text-align:center;pointer-events:none;opacity:0;
        transition:opacity .5s}
@@ -334,7 +335,7 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
 </div>
 
 <div class="wrap" id="setup" style="display:none">
-  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v50</span></p>
+  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v52</span></p>
   <div id="dots"></div>
 
   <section class="step" data-step="1">
@@ -364,14 +365,14 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
 
   <section class="step" data-step="3">
     <h1 id="q3">어떻게 갈까?</h1>
-    <p class="tiny" id="modeInfo"></p>
-    <div class="chips" id="modes"></div>
     <div id="loopWrap" style="display:none">
-      <p class="tiny" style="margin-top:22px" id="paceLabel">얼마나 빠르게?</p>
-      <div class="chips" id="loopPace"></div>
-      <p class="tiny" style="margin-top:20px">얼마나 돌까?</p>
+      <p class="tiny" id="kmLabel">얼마나 돌까?</p>
       <div class="chips" id="loopKms"></div>
     </div>
+    <p class="tiny" id="modeInfo" style="margin-top:20px">무엇으로 갈까</p>
+    <div class="chips" id="modes"></div>
+    <p class="tiny" id="paceLabel" style="margin-top:20px">얼마나 빠르게?</p>
+    <div class="chips" id="loopPace"></div>
   </section>
 
   <section class="step" data-step="4">
@@ -440,6 +441,7 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
       <div class="btns">
         <button id="arriveYes">좋아, 둘러보자</button>
         <button id="arriveLoop">이 동네 한 바퀴 돌래</button>
+        <button id="arriveHome">처음부터 다시 고를래</button>
         <button id="arriveNo">오늘은 여기까지</button>
       </div>
     </div>
@@ -768,52 +770,54 @@ function init(){
   const PACES = {
     walk: [["4,000보", 2.8], ["5,000보", 3.5], ["8,000보", 5.6], ["10,000보", 7.0]],
     run:  [["6,000보", 6.6], ["8,000보", 8.8], ["10,000보", 11.0], ["12,000보", 13.2]],
-    bike: [["천천히", 30], ["보통", 60]],
-    car:  [["동네길", 40], ["보통", 60], ["빠르게", 85]],
+    bike: [["천천히", 30], ["보통", 60], ["빠르게", 90]],
+    car:  [["천천히", 50], ["보통", 90], ["빠르게", 110], ["아주 빠르게", 150]],
   };
 
   function renderLoop(){
-    const w = $("#loopWrap");
-    w.style.display = loopMode ? "block" : "none";
-    if (!loopMode) return;
+    /* 한 바퀴일 때만 거리 고르기 */
+    $("#loopWrap").style.display = loopMode ? "block" : "none";
+    if (loopMode){
+      const box = $("#loopKms"); box.innerHTML = "";
+      [3, 5, 8, 10].forEach(k => {
+        const b = document.createElement("button");
+        b.className = "chip"; b.textContent = k + "km";
+        b.setAttribute("aria-pressed", loopKm === k);
+        b.onclick = async () => { loopKm = k; await check(); renderModes(); };
+        box.appendChild(b);
+      });
+    }
 
+    /* 속도 고르기 — 한 바퀴든 여정이든 */
     const list = PACES[mode.id] || [["보통", mode.kmh]];
     if (!pace || !list.some(x => x[1] === pace)) pace = list[Math.min(1, list.length-1)][1];
 
-    const pb = $("#loopPace"); pb.innerHTML = "";
-    $("#paceLabel").textContent = (mode.id === "walk") ? "얼마나 빠르게 걸을래? (시간당 걸음 수)"
-      : (mode.id === "run") ? "얼마나 빠르게 뛸래? (시간당 걸음 수)" : "얼마나 빠르게?";
-    list.forEach(([n, v]) => {
-      const b = document.createElement("button");
-      b.className = "chip";
-      b.innerHTML = `${n}<br><small style="opacity:.6">${v}km/h</small>`;
-      b.setAttribute("aria-pressed", pace === v);
-      b.onclick = async () => { pace = v; await check(); renderLoop(); };
-      pb.appendChild(b);
-    });
+    const need = Math.max(0, (totalM || 0) - startM) / 1000;      // 남은 거리(km)
+    const st = STRIDE[mode.id];
+    $("#paceLabel").textContent = st ? "얼마나 빠르게? (시간당 걸음 수)" : "얼마나 빠르게?";
 
-    const box = $("#loopKms"); box.innerHTML = "";
-    [3, 5, 10, 20].forEach(k => {
-      const mins = Math.round(k / (pace || mode.kmh) * 60);
+    const pb = $("#loopPace"); pb.innerHTML = "";
+    list.forEach(([n, v]) => {
+      const mins = need ? Math.round(need / v * 60) : 0;
+      const tTxt = !mins ? "" : mins < 60 ? mins + "분"
+        : Math.floor(mins/60) + "시간" + (mins % 60 ? " " + (mins%60) + "분" : "");
       const b = document.createElement("button");
       b.className = "chip";
-      const st = STRIDE[mode.id];
-      const steps = st ? Math.round(k * 1000 / st / 100) * 100 : 0;
-      const tTxt = mins < 60 ? mins + "분"
-        : Math.floor(mins/60) + "시간" + (mins % 60 ? " " + (mins%60) + "분" : "");
-      b.innerHTML = `${k}km<br><small style="opacity:.6">${tTxt}` +
-        (steps ? `<br>약 ${steps.toLocaleString()}보` : "") + `</small>`;
-      b.setAttribute("aria-pressed", loopKm === k);
+      b.innerHTML = `${n}<br><small style="opacity:.6">${v}km/h` +
+        (tTxt ? `<br>${tTxt}` : "") + `</small>`;
+      b.setAttribute("aria-pressed", pace === v);
       b.onclick = async () => {
-        loopKm = k;
+        pace = v;
         await check();
         renderLoop();
-        minutes = Math.max(5, Math.round(totalM / 1000 / (pace || mode.kmh) * 60));
-        rate = 1; rateTouched = true;
+        const total = Math.max(1, Math.round((Math.max(0,(totalM||0)-startM)/1000) / v * 60));
+        minutes = Math.min(180, total);
+        rate = Math.max(1, Math.round(total / minutes));
+        rateTouched = true;
         refresh();
         setTimeout(() => showStep(5), 240);
       };
-      box.appendChild(b);
+      pb.appendChild(b);
     });
   }
 
@@ -839,21 +843,22 @@ function init(){
       return;
     }
 
+    const needKm = Math.max(0, (totalM || 0) - startM) / 1000;
     let list;
     if (loopMode) list = ["walk","run","bike","car"];
     else if (startM >= travelEndM - 100 && travelEndM > 0) list = ["walk","run","bike"];
     else if (tripKind === "abroad") list = ["car"];
-    else list = ["walk","car"];
+    else if (needKm > 30) list = ["car"];                 // 멀면 걸어갈 수 없다
+    else if (needKm > 8) list = ["bike","car"];
+    else list = ["walk","run","bike","car"];
 
     list.map(id => MODES.find(m => m.id === id)).filter(Boolean).forEach(m => {
       const b = document.createElement("button");
       b.className = "chip"; b.innerHTML = `${m.name}<br><small style="opacity:.6">${m.kmh}km/h</small>`;
       b.setAttribute("aria-pressed", mode.id === m.id);
       b.onclick = async () => {
-        mode = m;
-        if (loopMode){ pace = 0; loopKm = (m.id === "walk") ? 3 : (m.id === "run") ? 5 : 10; }
+        mode = m; pace = 0;
         await check(); renderModes();
-        if (!loopMode) setTimeout(() => showStep(4), 220);
       };
       box.appendChild(b);
     });
@@ -1798,6 +1803,7 @@ document.addEventListener("click", (e) => {
   if (b.id === "arriveYes"){ e.preventDefault(); onArriveYes(); }
   else if (b.id === "arriveNo"){ e.preventDefault(); onArriveNo(); }
   else if (b.id === "arriveLoop"){ e.preventDefault(); onArriveLoop(); }
+  else if (b.id === "arriveHome"){ e.preventDefault(); onArriveHome(); }
   else if (b.id === "jump"){ e.preventDefault(); onJump(); }
 });
 
@@ -1825,6 +1831,26 @@ async function onArriveLoop(){
   buildMap();
   setAvatar();
   jump(0);
+}
+
+function onArriveHome(){
+  $("#arrive").style.display = "none";
+  waitStart = 0;
+  try { clearInterval(timer); } catch(e){}
+  timer = null;
+  stopMusic();
+  $("#ride").style.display = "none";
+  $("#done").style.display = "none";
+  $("#setup").style.display = "flex";
+  loopMode = false; touring = false; tripKind = "";
+  to = null; startM = 0; skipTouched = false; pace = 0;
+  path = []; cum = []; totalM = 0; legs = []; spots = []; travelEndM = 0; groundM = 0;
+  travelled = 0; want = 0;
+  if (homeFrom) from = { ...homeFrom };
+  $("#qTo").value = ""; $("#sTo").innerHTML = "";
+  $("#pickWrap").style.display = "none";
+  if (window.renderKinds) window.renderKinds();
+  if (window.showStep) window.showStep(1);
 }
 
 function onJump(){
@@ -1976,7 +2002,7 @@ function applyName(n){
   loadHome();
   $("#intro").style.display = "none";
   $("#setup").style.display = "flex";
-  $("#brand").innerHTML = '창밖 여행 <span id="ver">v50</span>';
+  $("#brand").innerHTML = '창밖 여행 <span id="ver">v52</span>';
   if (window.showStep) window.showStep(1);
   if (window.renderKinds) window.renderKinds();
   const q1 = $("#q1"); if (q1) q1.innerHTML = voc(NAME) + ",<br>오늘 어디 가고 싶어?";
