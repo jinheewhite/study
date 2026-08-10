@@ -334,7 +334,7 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
 </div>
 
 <div class="wrap" id="setup" style="display:none">
-  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v47</span></p>
+  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v48</span></p>
   <div id="dots"></div>
 
   <section class="step" data-step="1">
@@ -522,7 +522,7 @@ let pausedUntil = 0, timer = null, holdTimer = null, hold = 0, locked = false, f
 let legs = [], spots = [];              // 구간 목록 / 지나며 볼 명소
 let groundM = 0, travelEndM = 0;        // 공항까지 육로 거리 / 목적지 도착 지점
 let startM = 0, want = 0, doneKm = 0;   // 출발 지점 / 지금 가야 할 지점 / 오늘 간 거리
-let touring = false, loopMode = false, skipTouched = false, loopKm = 3;
+let touring = false, loopMode = false, skipTouched = false, loopKm = 3, pace = 0;
 let depName = "", arrName = "", tripCity = null;
 let pausedSec = 0, legNow = "";         // 멈춰 있던 시간 / 지금 타고 있는 것
 let homeFrom = null;                    // 우리 집 위치
@@ -1958,7 +1958,7 @@ function applyName(n){
   loadHome();
   $("#intro").style.display = "none";
   $("#setup").style.display = "flex";
-  $("#brand").innerHTML = '창밖 여행 <span id="ver">v47</span>';
+  $("#brand").innerHTML = '창밖 여행 <span id="ver">v48</span>';
   if (window.showStep) window.showStep(1);
   if (window.renderKinds) window.renderKinds();
   const q1 = $("#q1"); if (q1) q1.innerHTML = voc(NAME) + ",<br>오늘 어디 가고 싶어?";
