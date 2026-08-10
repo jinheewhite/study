@@ -162,7 +162,7 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
   @keyframes lamp{to{background-position:-120px 0}}
   #tunnel .tname{position:absolute;left:0;right:0;top:52%;text-align:center;color:#E8E4DC;font-size:15px;
        letter-spacing:.05em;text-shadow:0 1px 6px #000}
-  #avatar{position:absolute;left:50%;top:62%;transform:translate(-50%,-100%);pointer-events:none;
+  #avatar{position:absolute;left:50%;top:50%;transform:translate(-50%,-100%);pointer-events:none;
     z-index:6;display:none;width:74px;text-align:center}
   #avatar.onroad svg{width:132px;height:132px}
   #avatar.onroad b{font-size:14px}
@@ -342,7 +342,7 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
 </div>
 
 <div class="wrap" id="setup" style="display:none">
-  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v58</span></p>
+  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v59</span></p>
   <div id="dots"></div>
 
   <section class="step" data-step="1">
@@ -559,7 +559,7 @@ function chips(sel, list, get, set){
 }
 chips("#modes", MODES.filter(m => m.id !== "plane" && m.id !== "boat").map(m=>({label:`${m.name} ${m.kmh}km/h`, value:m})),
       ()=>mode, v=>{ mode = v; check(); });
-const VIEWS = [{label:"지도",value:"map"},{label:"거리뷰",value:"road"}];
+const VIEWS = [{label:"지도",value:"map"},{label:"거리뷰",value:"road"},{label:"그림",value:"draw"}];
 chips("#views", VIEWS, ()=>viewMode, v=>viewMode=v);
 chips("#musics", [{label:"켜기",value:true},{label:"끄기",value:false}], ()=>music, v=>music=v);
 
@@ -2081,7 +2081,7 @@ function applyName(n){
   loadHome();
   $("#intro").style.display = "none";
   $("#setup").style.display = "flex";
-  $("#brand").innerHTML = '창밖 여행 <span id="ver">v58</span>';
+  $("#brand").innerHTML = '창밖 여행 <span id="ver">v59</span>';
   if (window.showStep) window.showStep(1);
   if (window.renderKinds) window.renderKinds();
   const q1 = $("#q1"); if (q1) q1.innerHTML = voc(NAME) + ",<br>오늘 어디 가고 싶어?";
@@ -2451,7 +2451,7 @@ function buildMap(){
     if (buildMiniWorld()){
       $("#mini").style.display = "";
       $("#swap").onclick = () => {
-        const ring = roadOK() ? ["map","road"] : ["map"];
+        const ring = roadOK() ? ["map","road","draw"] : ["map","draw"];
         viewMode = ring[(ring.indexOf(viewMode) + 1) % ring.length];
         applyView();
       };
@@ -2475,7 +2475,7 @@ function buildMap(){
     buildWorldMap();
     $("#swap").style.display = "";
     $("#swap").onclick = () => {
-        const ring = roadOK() ? ["map","road"] : ["map"];
+        const ring = roadOK() ? ["map","road","draw"] : ["map","draw"];
     viewMode = ring[(ring.indexOf(viewMode) + 1) % ring.length];
     applyView();
   };
@@ -2508,7 +2508,7 @@ function buildMap(){
     zIndex:3, content:'<div class="pin me"></div>', xAnchor:0.5, yAnchor:0.5 });
   fitMini();
   $("#swap").onclick = () => {
-    const ring = roadOK() ? ["map","road"] : ["map"];
+    const ring = roadOK() ? ["map","road","draw"] : ["map","draw"];
     viewMode = ring[(ring.indexOf(viewMode) + 1) % ring.length];
     applyView();
   };
@@ -2966,6 +2966,7 @@ function setAvatar(){
   const el = $("#avatar");
   const on = (viewMode === "map" || viewMode === "road");
   el.classList.toggle("onroad", viewMode === "road");
+  el.style.top = (viewMode === "road") ? "62%" : "50%";
   el.style.display = on ? "block" : "none";
   if (!on) return;
   const k = legs.length ? legAt(travelled) : mode.id;
@@ -3481,8 +3482,7 @@ function sceneTick(){
 
 function applyView(){
   if (viewMode === "sat" || (viewMode === "road" && !roadOK())) viewMode = "map";
-  if (viewMode === "draw") viewMode = "map";
-  sceneOn = false;
+  sceneOn = (viewMode === "draw");
   const satOn = (viewMode === "map");
   const roadOn = (viewMode === "road");
   $("#road").style.display = roadOn ? "block" : "none";
@@ -3491,8 +3491,9 @@ function applyView(){
   $("#scene").style.display = sceneOn ? "block" : "none";
   $("#sat").style.display   = satOn ? "block" : "none";
   $("#satzoom").style.display = (viewMode === "map") ? "flex" : "none";
-  $("#swap").textContent = (viewMode === "map") ? "거리뷰" : "지도";
-  $("#swap").style.display = roadOK() ? "" : "none";
+  $("#swap").textContent = (viewMode === "map") ? (roadOK() ? "거리뷰" : "그림")
+    : (viewMode === "road") ? "그림" : "지도";
+  $("#swap").style.display = "";
   if (satOn){
     buildSat();
     setTimeout(() => {
