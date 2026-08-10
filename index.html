@@ -49,7 +49,7 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
   #plan{margin-top:22px;padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--panel);
        font-size:13px;line-height:1.9;color:#8FA9A4;display:none}
   #plan b{color:var(--paper);font-weight:600}
-  #plan u{color:var(--dawn);text-decoration:none}
+  #plan u{font-size:19px;color:var(--dawn);text-decoration:none}
   #switch{width:100%;height:44px;margin-top:12px;border:1px solid var(--line);border-radius:10px;
     background:none;color:var(--dim);font-size:13px;font-family:inherit}
   #ratelist{display:flex;flex-direction:column;gap:10px;margin-bottom:6px;text-align:left}
@@ -80,6 +80,7 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
   #setup.mid .sug{text-align:left}
   #setup.mid .step h1{font-size:clamp(30px, 8.4vw, 46px);line-height:1.28;margin:0 0 4px}
   #setup.mid .tiny{font-size:15px;margin:14px 0 26px}
+  .step[data-step="5"] .tiny{font-size:15px}
   #setup.mid .chips{gap:12px;margin-bottom:8px}
   #setup.mid .chip{height:64px;font-size:17px}
   #setup.mid #ratelist button{padding:16px 18px}
@@ -105,6 +106,10 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
   #tripBtn{width:100%;height:54px;margin-top:12px;border-radius:12px;border:1px solid var(--dawn);
     background:#241C15;color:var(--dawn);font-size:16px;font-family:inherit}
   #tripList{display:none;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+  #trailList{display:none;flex-direction:column;gap:8px;margin-top:4px}
+  #trailList button{display:block;width:100%;padding:13px 16px;border-radius:12px;border:1px solid var(--line);
+    background:var(--panel);color:var(--paper);font-family:inherit;text-align:left;font-size:15px}
+  #trailList button small{display:block;margin-top:4px;font-size:12px;color:var(--dim)}
   #tripList button{height:56px;border-radius:12px;border:1px solid var(--line);background:var(--panel);
     color:var(--paper);font-size:14px;font-family:inherit;line-height:1.4}
   #tripList button small{display:block;font-size:11px;color:var(--dim);margin-top:3px}
@@ -335,7 +340,7 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
 </div>
 
 <div class="wrap" id="setup" style="display:none">
-  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v52</span></p>
+  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v57</span></p>
   <div id="dots"></div>
 
   <section class="step" data-step="1">
@@ -347,6 +352,8 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
       <input id="qTo" placeholder="가고 싶은 곳" autocomplete="off">
       <div class="sug" id="sTo"></div>
       <div id="tripList"></div>
+      <p class="tiny" id="trailLabel" style="display:none;margin-top:20px">가까운 걷기 좋은 곳</p>
+      <div id="trailList"></div>
     </div>
     <p class="tiny" id="pickInfo"></p>
   </section>
@@ -525,7 +532,7 @@ let pausedUntil = 0, timer = null, holdTimer = null, hold = 0, locked = false, f
 let legs = [], spots = [];              // 구간 목록 / 지나며 볼 명소
 let groundM = 0, travelEndM = 0;        // 공항까지 육로 거리 / 목적지 도착 지점
 let startM = 0, want = 0, doneKm = 0;   // 출발 지점 / 지금 가야 할 지점 / 오늘 간 거리
-let touring = false, loopMode = false, skipTouched = false, loopKm = 3, pace = 0;
+let touring = false, loopMode = false, skipTouched = false, loopKm = 3, pace = 0, loopVia = null;
 let depName = "", arrName = "", tripCity = null;
 let pausedSec = 0, legNow = "";         // 멈춰 있던 시간 / 지금 타고 있는 것
 let homeFrom = null;                    // 우리 집 위치
@@ -645,7 +652,7 @@ function init(){
     $("#pickInfo").textContent = k.info;
     skipTouched = false; startM = 0;
     if (k.id === "local"){
-      loopMode = true; touring = false;
+      loopMode = true; touring = false; loopVia = null;
       $("#pickWrap").style.display = "block";
       $("#hereLoop").style.display = "";
       $("#homeLoop").style.display = homeFrom ? "" : "none";
@@ -656,9 +663,11 @@ function init(){
       if (window.useHereLoop) window.useHereLoop(true);
       return;
     }
-    loopMode = false;
+    loopMode = false; loopVia = null;
     $("#hereLoop").style.display = "none";
     $("#homeLoop").style.display = "none";
+    $("#trailList").style.display = "none";
+    $("#trailLabel").style.display = "none";
     $("#tripList").style.display = "grid";
     $("#qTo").placeholder = "가고 싶은 곳";
     $("#pickWrap").style.display = "block";
@@ -670,7 +679,7 @@ function init(){
   /* ── 어디서 출발할까 ── */
   function renderStart(){
     const box = $("#startList"); box.innerHTML = "";
-    const opts = [{ m:0, label:(tripKind === "local" ? "집에서 걸어서" : "우리 집에서 처음부터") }];
+    const opts = [{ m:0, label:(tripKind === "local" ? "집에서 걸어서" : "우리 집에서 출발") }];
     if (groundM > 1000) opts.push({ m:groundM, label:depName + "부터" });
     if (travelEndM > 1000 && travelEndM > groundM + 1000)
       opts.push({ m:travelEndM, label:(to ? to.name : "도착지") + " 도착부터" });
@@ -683,7 +692,7 @@ function init(){
       b.innerHTML = `<b>${esc(o.label)}</b>` +
         (o.loop ? `<small>그 동네를 걸어서 한 바퀴</small>`
          : o.m > 0 ? `<small>여기까지는 건너뛰기</small>`
-         : `<small>처음부터 다 가기</small>`);
+         : `<small>가는 길을 다 지나가</small>`);
       b.onclick = async () => {
         if (o.loop){                                   // 그 동네를 도는 코스로
           loopMode = true; touring = false; skipTouched = true; startM = 0;
@@ -824,9 +833,12 @@ function init(){
   function renderModes(){
     renderLoop();
     const q3 = $("#q3");
+    const leftKm = Math.max(0, (totalM || 0) - startM) / 1000;
     if (q3) q3.textContent = loopMode
-      ? (shortName(from && from.name) + " 한 바퀴 — 어떻게 돌까?")
-      : "어떻게 갈까?";
+      ? ((loopVia ? shortName(loopVia.name) : shortName(from && from.name)) + " 한 바퀴 — 어떻게 돌까?")
+      : (leftKm
+          ? `${shortName(from && from.name)} → ${to ? to.name : ""} ${leftKm.toFixed(0)}km — 어떻게 갈까?`
+          : "어떻게 갈까?");
     const box = $("#modes"); box.innerHTML = "";
     const info = $("#modeInfo");
 
@@ -848,8 +860,7 @@ function init(){
     if (loopMode) list = ["walk","run","bike","car"];
     else if (startM >= travelEndM - 100 && travelEndM > 0) list = ["walk","run","bike"];
     else if (tripKind === "abroad") list = ["car"];
-    else if (needKm > 30) list = ["car"];                 // 멀면 걸어갈 수 없다
-    else if (needKm > 8) list = ["bike","car"];
+    else if (needKm > 50) list = ["bike","car"];          // 50km 넘으면 걸어갈 수 없다
     else list = ["walk","run","bike","car"];
 
     list.map(id => MODES.find(m => m.id === id)).filter(Boolean).forEach(m => {
@@ -880,7 +891,10 @@ function init(){
     if (n === 1) return !!to;
     return true;
   }
-  function showStep(n){
+  function showStep(n, dir){
+    dir = dir || (n >= step ? 1 : -1);
+    if (n === 2 && loopMode) return showStep(dir > 0 ? 3 : 1, dir);
+    if (n === 4 && loopMode) return showStep(dir > 0 ? 5 : 3, dir);
     step = Math.max(1, Math.min(STEPS, n));
     document.querySelectorAll(".step").forEach(el =>
       el.classList.toggle("on", +el.dataset.step === step));
@@ -900,8 +914,8 @@ function init(){
       const mm = $("#mm"); if (mm) mm.textContent = minutes;
       const q6 = $("#q6");
       if (q6) q6.textContent = loopMode
-        ? (shortName(from && from.name) + " 한 바퀴 걷자!")
-        : "우리 출발할까?";
+        ? ((loopVia ? shortName(loopVia.name) : shortName(from && from.name)) + " 한 바퀴 걷자!")
+        : (to ? `${shortName(from && from.name)} → ${to.name}` : "우리 출발할까?");
     }
     window.scrollTo(0, 0);
   }
@@ -909,7 +923,7 @@ function init(){
   window.renderKinds = renderKinds;
   renderKinds();
   window.refreshNav = () => { if (canGo(step)) $("#warn").textContent = ""; };
-  $("#prev").onclick = () => showStep(step - 1);
+  $("#prev").onclick = () => showStep(step - 1, -1);
   /* 칸에 글자만 있어도 알아서 찾아준다 */
   function resolve(which){
     const q = $(which === "from" ? "#qFrom" : "#qTo").value.trim();
@@ -992,6 +1006,7 @@ function init(){
       mode = MODES.find(m => m.id === "walk"); loopKm = 3;
       b.disabled = false; b.textContent = "📍  지금 내가 있는 곳";
       $("#pickInfo").textContent = "";
+      showTrails(pt);
       await check();
       showStep(3);
     };
@@ -1014,11 +1029,34 @@ function init(){
   };
   $("#hereLoop").onclick = () => window.useHereLoop(false);
 
+  window.showTrails = async (pt) => {
+    const box = $("#trailList"), lab = $("#trailLabel");
+    box.innerHTML = ""; box.style.display = "none"; lab.style.display = "none";
+    const list = await nearbyTrails(pt);
+    if (!list.length) return;
+    lab.style.display = ""; box.style.display = "flex";
+    list.forEach(t => {
+      const b = document.createElement("button");
+      b.innerHTML = `${esc(t.name)}<small>${Math.round(t.d)}m · ${esc(t.addr)}</small>`;
+      b.onclick = async () => {
+        loopMode = true; touring = false; skipTouched = false; startM = 0;
+        from = { name: pt.name || "지금 있는 곳", lat: pt.lat, lng: pt.lng };
+        to   = { ...from };
+        loopVia = { name:t.name, lat:t.lat, lng:t.lng };
+        mode = MODES.find(m => m.id === "walk"); pace = 0; loopKm = 3;
+        await check();
+        showStep(3);
+      };
+      box.appendChild(b);
+    });
+  };
+
   $("#homeLoop").onclick = async () => {
     if (!homeFrom){ $("#warn").textContent = "집 위치가 아직 없어"; return; }
     loopMode = true; touring = false;
     from = { ...homeFrom }; to = { ...homeFrom };
     mode = MODES.find(m => m.id === "walk"); loopKm = 3;
+    if (window.showTrails) window.showTrails(homeFrom);
     await check();
     showStep(3);
   };
@@ -1252,6 +1290,7 @@ function tripSeconds(r){
   const sec = g / gv + Math.max(0, totalM - g) / av;      // 가상 시간
   return sec / r;                                        // 실제 앉아 있어야 하는 시간
 }
+function timeFromTotal(){ return Math.max(0, (totalM - startM)) / ((pace || mode.kmh) * 1000 / 3600); }
 const hhmm = (sec) => {
   const m = Math.round(sec / 60);
   if (m < 60) return m + "분";
@@ -1299,15 +1338,18 @@ function refresh(){
   const hrs  = km / eff;
   const time = hrs >= 1 ? `${Math.floor(hrs)}시간 ${Math.round((hrs%1)*60)}분` : `${Math.round(hrs*60)}분`;
   renderRates();
-  const wayTxt = loopMode ? (shortName(from && from.name) + " 한 바퀴") : touring ? `${from.name} 둘러보기` : `${from.name} → ${to.name}`;
+  const wayTxt = loopMode
+    ? (loopVia ? (shortName(loopVia.name) + " 한 바퀴") : (shortName(from && from.name) + " 한 바퀴")) : touring ? `${from.name} 둘러보기` : `${from.name} → ${to.name}`;
   $("#plan").innerHTML =
     `<b>${esc(wayTxt)}</b><br>` +
     (loopMode
       ? `${mode.name}로 <u>${km.toFixed(1)}km</u>` +
         (STRIDE[mode.id] ? ` · 약 <u>${Math.round(km*1000/STRIDE[mode.id]/100)*100}보</u>` : "") +
         `<br><u>${minutes}분</u>이면 제자리로 돌아와`
-      : `${mode.name}로 <u>${km.toFixed(0)}km</u> · ` +
-        (runs <= 1 ? `오늘 <u>${minutes}분</u>이면 도착` : `집중 <u>${runs}번</u>이면 도착`)) +
+      : `${mode.name} <u>${(pace || mode.kmh)}km/h</u> 로 <u>${km.toFixed(0)}km</u>` +
+        `<br>가는 데 <u>${hhmm(timeFromTotal())}</u> 걸려` +
+        `<br>오늘은 <u>${minutes}분</u> 앉아 있자` +
+        (runs > 1 ? ` · 집중 <u>${runs}번</u>이면 도착` : "")) +
     (loopMode ? "" :
      spots.length > 1 ? `<br>도착하면 명소 <u>${spots.length}곳</u>을 걸어서 둘러봐` : "");
 }
@@ -1557,6 +1599,29 @@ async function worldPlaceSearch(q, near){
     } catch(e){}
   }
   return [];
+}
+
+/* 근처에 걷기 좋은 곳 — 천변·공원·둘레길 */
+function nearbyTrails(pt){
+  if (!ps) return Promise.resolve([]);
+  const words = ["산책로", "천변", "체육공원", "근린공원", "둘레길", "생태공원", "강변"];
+  return Promise.all(words.map(kw => new Promise(res => {
+    ps.keywordSearch(kw, (d, st) => {
+      res(st === kakao.maps.services.Status.OK ? d : []);
+    }, { location:new kakao.maps.LatLng(pt.lat, pt.lng), radius:5000,
+         sort:kakao.maps.services.SortBy.DISTANCE });
+  }))).then(all => {
+    const seen = {}, out = [];
+    [].concat(...all).forEach(x => {
+      const nm = x.place_name;
+      if (seen[nm]) return;
+      seen[nm] = 1;
+      out.push({ name:nm, lat:+x.y, lng:+x.x,
+                 addr:(x.road_address_name || x.address_name || ""),
+                 d: metres(pt, { lat:+x.y, lng:+x.x }) });
+    });
+    return out.sort((a,b) => a.d - b.d).slice(0, 6);
+  }).catch(() => []);
 }
 
 /* 주변 명소 하나를 골라 좌표까지 가져온다 */
@@ -2002,7 +2067,7 @@ function applyName(n){
   loadHome();
   $("#intro").style.display = "none";
   $("#setup").style.display = "flex";
-  $("#brand").innerHTML = '창밖 여행 <span id="ver">v52</span>';
+  $("#brand").innerHTML = '창밖 여행 <span id="ver">v57</span>';
   if (window.showStep) window.showStep(1);
   if (window.renderKinds) window.renderKinds();
   const q1 = $("#q1"); if (q1) q1.innerHTML = voc(NAME) + ",<br>오늘 어디 가고 싶어?";
@@ -2176,248 +2241,46 @@ async function loadRoute(){
 
 /* 집을 중심으로 한 바퀴 도는 코스 (실제 도로) */
 async function loopPath(home, km){
-  const r = km / (2 * Math.PI);                       // 반지름(km)
-  const dLat = r / 111.2;
-  const dLng = r / (111.2 * Math.cos(home.lat * Math.PI / 180));
-  const wps = [];
-  for (let i = 0; i < 6; i++){
-    const a = (i / 6) * Math.PI * 2;
-    wps.push({ lat: home.lat + Math.sin(a) * dLat, lng: home.lng + Math.cos(a) * dLng });
-  }
-  const all = [home, ...wps, home];
-  try {
-    const coords = all.map(p => `${p.lng},${p.lat}`).join(";");
-    const u = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
-    const j = await (await fetch(u)).json();
-    if (j.routes && j.routes[0])
-      return j.routes[0].geometry.coordinates.map(c => ({ lng:c[0], lat:c[1] }));
-  } catch(e){}
-  /* 도로를 못 찾으면 동그란 길로라도 */
-  const out = [];
-  for (let i = 0; i <= 72; i++){
-    const a = (i / 72) * Math.PI * 2;
-    out.push({ lat: home.lat + Math.sin(a) * dLat, lng: home.lng + Math.cos(a) * dLng });
-  }
-  return out;
-}
-
-/* 도착 팝업 내용 */
-let tourKmh = 4, tourFirst = 0;
-let tourPick = [];
-function fillArrive(){
-  tourKmh = 4; tourFirst = 0; tourPick = [];
-  const mb = $("#arriveModes"); mb.innerHTML = "";
-  [["걸어서",4],["뛰어서",11],["자전거로",16],["차로",40]].forEach(([n,v]) => {
-    const b = document.createElement("button");
-    b.className = "chip"; b.textContent = n;
-    b.setAttribute("aria-pressed", tourKmh === v);
-    b.onclick = () => { tourKmh = v; fillArriveMarks(); };
-    mb.appendChild(b);
-  });
-  drawSpotList();
-  const q = $("#arriveQ"), sug = $("#arriveSug");
-  q.value = ""; sug.innerHTML = "";
-  let t = null;
-  q.oninput = () => {
-    clearTimeout(t);
-    const kw = q.value.trim();
-    if (kw.length < 2){ sug.innerHTML = ""; return; }
-    t = setTimeout(async () => {
-      const here = to || from;
-      const add = (name, lat, lng, sub, desc, img) => {
-        const row = document.createElement("div");
-        row.innerHTML = `<b>${esc(name)}</b>` + (sub ? `<small>${esc(sub)}</small>` : "");
-        row.onclick = () => {
-          spots = spots.filter(sp => sp.name !== name);
-          spots.unshift({ name, desc: desc || "", img: img || "", lat, lng, m:0 });
-          tourPick.push(name);
-          q.value = ""; sug.innerHTML = "";
-          drawSpotList();
-        };
-        sug.appendChild(row);
-      };
-
-      if (here && !inKorea(here)){                     // 해외 — 그곳 지명으로
-        sug.innerHTML = "<div><b>찾는 중…</b></div>";
-        const list = await worldPlaceSearch(kw, here);
-        sug.innerHTML = "";
-        if (!list.length){ sug.innerHTML = "<div><b>못 찾았어</b><small>다른 이름으로 해볼까</small></div>"; return; }
-        list.forEach(x => add(x.name, x.lat, x.lng, "", x.desc, x.img));
-        return;
-      }
-
-      if (!ps){ sug.innerHTML = ""; return; }
-      ps.keywordSearch(kw, (d, st) => {
-        sug.innerHTML = "";
-        if (st !== kakao.maps.services.Status.OK) return;
-        d.slice(0,5).forEach(x => add(x.place_name, +x.y, +x.x, x.road_address_name || x.address_name));
-      }, { location:new kakao.maps.LatLng(here.lat, here.lng), radius:20000 });
-    }, 300);
-  };
-  fillArriveMarks();
-}
-
-function drawSpotList(){
-  const sb = $("#arriveSpots"); sb.innerHTML = "";
-  spots.forEach((sp, i) => {
-    const row = document.createElement("div");
-    row.className = "sprow";
-
-    const b = document.createElement("button");
-    b.className = "pick"; b.type = "button";
-    b.innerHTML = `<span class="no">${i === tourFirst ? "▶" : ""}</span>${esc(sp.name)}`;
-    b.setAttribute("aria-pressed", tourFirst === i);
-    b.onclick = () => { tourFirst = i; drawSpotList(); };
-    row.appendChild(b);
-
-    /* 그 자리 거리를 미리 둘러볼 수 있게 */
-    if (typeof sp.lat === "number" && typeof sp.lng === "number"){
-      const eye = document.createElement("button");
-      eye.className = "eye"; eye.type = "button"; eye.textContent = "거리 보기";
-      eye.onclick = (ev) => { ev.stopPropagation(); openPeek(sp); };
-      row.appendChild(eye);
+  const via = (typeof loopVia !== "undefined" && loopVia) ? loopVia : null;
+  const cen = via ? via : home;                     // 산책로가 있으면 그 둘레로 돈다
+  const ring = async (r) => {
+    const dLat = r / 111.2;
+    const dLng = r / (111.2 * Math.cos(cen.lat * Math.PI / 180));
+    const wps = [];
+    for (let i = 0; i < 6; i++){
+      const a = (i / 6) * Math.PI * 2;
+      wps.push({ lat: cen.lat + Math.sin(a) * dLat, lng: cen.lng + Math.cos(a) * dLng });
     }
-    sb.appendChild(row);
-  });
-}
-
-/* ── 명소 앞에 서서 둘러보기 (카카오 로드뷰) ── */
-let peekRv = null, peekRvc = null, peekHintTimer = null, peekPano = null, peekBusy = false;
-
-/* 고개만 돌린다 */
-function peekTurn(deg){
-  if (!peekRv) return;
-  try {
-    const v = peekRv.getViewpoint();
-    peekRv.setViewpoint({ pan: (v.pan + deg + 360) % 360, tilt: v.tilt, zoom: v.zoom });
-  } catch(e){}
-}
-
-/* 지금 보고 있는 쪽으로 한 걸음 간다 */
-function peekWalk(){
-  if (!peekRv || !peekRvc || peekBusy) return;
-  let v, here;
-  try { v = peekRv.getViewpoint(); here = peekRv.getPosition(); } catch(e){ return; }
-  if (!here) return;
-
-  const btn = $("#peekWalk");
-  const rad = v.pan * Math.PI / 180;                 // pan 은 북쪽 기준 시계방향
-  const la = here.getLat(), ln = here.getLng();
-  const say = (t) => { btn.textContent = t; };
-  peekBusy = true; btn.disabled = true;
-
-  const done = (t) => {
-    peekBusy = false; btn.disabled = false;
-    if (t){ say(t); setTimeout(() => say("앞으로 걷기"), 1500); } else say("앞으로 걷기");
+    const all = via ? [home, via, ...wps, via, home] : [home, ...wps, home];
+    try {
+      const coords = all.map(p => `${p.lng},${p.lat}`).join(";");
+      const u = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
+      const j = await (await fetch(u)).json();
+      if (j.routes && j.routes[0])
+        return j.routes[0].geometry.coordinates.map(c => ({ lng:c[0], lat:c[1] }));
+    } catch(e){}
+    const out = [];
+    if (via) out.push(home);
+    for (let i = 0; i <= 72; i++){
+      const a = (i / 72) * Math.PI * 2;
+      out.push({ lat: cen.lat + Math.sin(a) * dLat, lng: cen.lng + Math.cos(a) * dLng });
+    }
+    if (via) out.push(home);
+    return out;
   };
+  const lenOf = (p) => { let L = 0; for (let i = 1; i < p.length; i++) L += metres(p[i-1], p[i]); return L; };
 
-  /* 앞쪽으로 조금씩 넓혀 가며 다음 사진을 찾는다 */
-  const step = (d, tries) => {
-    const lat = la + (d * Math.cos(rad)) / 111320;
-    const lng = ln + (d * Math.sin(rad)) / (111320 * Math.cos(la * Math.PI / 180));
-    const np = new kakao.maps.LatLng(lat, lng);
-    peekRvc.getNearestPanoId(np, Math.max(20, d * 0.9), (id) => {
-      if (id && id !== peekPano){
-        peekPano = id;
-        peekRv.setPanoId(id, np);
-        /* 고개는 걷던 방향 그대로 두어야 계속 앞으로 갈 수 있다 */
-        setTimeout(() => { try { peekRv.setViewpoint({ pan:v.pan, tilt:0, zoom:v.zoom }); } catch(e){} }, 160);
-        return done("");
-      }
-      if (tries < 3) return step(d + 25, tries + 1);
-      done("이 길은 여기까지야");
-    });
-  };
-  step(20, 0);
-}
-
-function openPeek(sp){
-  if (!sp || typeof sp.lat !== "number" || typeof sp.lng !== "number") return;
-  if (!window.kakao || !kakao.maps || !kakao.maps.Roadview) return;
-
-  $("#peekName").textContent = sp.name || "";
-  $("#peekMsg").textContent = "거리를 찾는 중…";
-  $("#peekView").style.display = "block";
-  $("#peekNav").style.display = "none";
-  $("#peek").style.display = "block";
-  peekPano = null; peekBusy = false;
-  $("#peekWalk").disabled = false; $("#peekWalk").textContent = "앞으로 걷기";
-
-  const hint = $("#peekHint");
-  hint.style.opacity = "1";
-  clearTimeout(peekHintTimer);
-  peekHintTimer = setTimeout(() => { hint.style.opacity = "0"; }, 3200);
-
-  if (!peekRv){
-    peekRv  = new kakao.maps.Roadview($("#peekView"));
-    peekRvc = new kakao.maps.RoadviewClient();
+  let r = km / (2 * Math.PI);
+  let best = await ring(r);
+  for (let n = 0; n < 3; n++){                      // 실제 길이에 맞춰 두세 번 보정
+    const got = lenOf(best) / 1000;
+    if (!got) break;
+    const off = Math.abs(got - km) / km;
+    if (off < 0.12) break;                          // 12% 안이면 그만
+    r = Math.max(0.05, r * (km / got));
+    best = await ring(r);
   }
-  const pos = new kakao.maps.LatLng(sp.lat, sp.lng);
-
-  const show = (id) => {
-    $("#peekMsg").textContent = "";
-    peekPano = id;
-    peekRv.setPanoId(id, pos);
-    $("#peekNav").style.display = "flex";
-    setTimeout(() => { try { peekRv.relayout(); } catch(e){} }, 120);
-  };
-  const giveUp = () => {
-    $("#peekView").style.display = "none";
-    $("#peekNav").style.display = "none";
-    $("#peekMsg").textContent = (sp.name || "이곳") + "은\n거리 사진이 없는 곳이야";
-    hint.style.opacity = "0";
-  };
-
-  /* 가까운 곳부터, 없으면 좀 더 넓게 찾아본다 */
-  peekRvc.getNearestPanoId(pos, 120, (id) => {
-    if (id) return show(id);
-    peekRvc.getNearestPanoId(pos, 600, (id2) => id2 ? show(id2) : giveUp());
-  });
-}
-
-function closePeek(){
-  $("#peek").style.display = "none";
-  clearTimeout(peekHintTimer);
-}
-function fillArriveMarks(){
-  const mv = [4,11,16,40];
-  $("#arriveModes").querySelectorAll("button").forEach((b,i) =>
-    b.setAttribute("aria-pressed", tourKmh === mv[i]));
-  drawSpotList();
-}
-
-/* 도착 후 관광 구간을 다시 짠다 */
-function rebuildTour(order, kmh){
-  let cut = path.length - 1;
-  for (let i = 0; i < cum.length; i++){ if (cum[i] >= travelEndM){ cut = i; break; } }
-  const head = path.slice(0, Math.max(2, cut + 1));
-  const travelLegs = [];
-  let acc = 0;
-  for (const L of legs){ if (acc >= travelEndM - 1) break; travelLegs.push(L); acc += L.len; }
-
-  let cur = head[head.length - 1];
-  const out = head.slice();
-  const newLegs = travelLegs.slice();
-  const newSpots = [];
-  order.forEach(sp => {
-    if (typeof sp.lat !== "number" || typeof sp.lng !== "number") return;
-    const line = greatCircle(cur, { lat:sp.lat, lng:sp.lng }, 24);
-    let len = 0;
-    for (let i = 1; i < line.length; i++) len += metres(line[i-1], line[i]);
-    if (len < 30) return;
-    out.push(...line.slice(1));
-    newLegs.push({ len, kmh, kind: kmh > 20 ? "car" : "walk" });
-    cur = { lat:sp.lat, lng:sp.lng };
-    newSpots.push({ ...sp, seen:false, m: newLegs.reduce((a,l) => a + l.len, 0) });
-  });
-  const keepPath = path, keepLegs = legs, keepSpots = spots, keepCum = cum, keepTotal = totalM;
-  path = out; legs = newLegs; spots = newSpots;
-  cum = [0];
-  for (let i = 1; i < path.length; i++) cum.push(cum[i-1] + metres(path[i-1], path[i]));
-  totalM = cum[cum.length-1];
-  if (!isFinite(totalM) || totalM <= 0){          // 어딘가 어긋나면 되돌린다
-    path = keepPath; legs = keepLegs; spots = keepSpots; cum = keepCum; totalM = keepTotal;
-  }
+  return best;
 }
 
 /* 도로 경로 한 구간 */
@@ -3105,6 +2968,103 @@ function faceAvatar(pan){
   g.style.transform = (kk === "plane" || kk === "boat")
     ? `rotate(${(pan || 0).toFixed(0)}deg)`
     : (pan > 180 ? "scaleX(-1)" : "scaleX(1)");
+}
+
+/* ── 서서 둘러보기 ── */
+let peekRv = null, peekRvc = null, peekHintTimer = null, peekPano = null, peekBusy = false;
+
+function openPeek(sp){
+  if (!sp || typeof sp.lat !== "number" || typeof sp.lng !== "number") return;
+  if (!window.kakao || !kakao.maps || !kakao.maps.Roadview) return;
+
+  $("#peekName").textContent = sp.name || "";
+  $("#peekMsg").textContent = "거리를 찾는 중…";
+  $("#peekView").style.display = "block";
+  $("#peekNav").style.display = "none";
+  $("#peek").style.display = "block";
+  peekPano = null; peekBusy = false;
+  $("#peekWalk").disabled = false; $("#peekWalk").textContent = "앞으로 걷기";
+
+  const hint = $("#peekHint");
+  hint.style.opacity = "1";
+  clearTimeout(peekHintTimer);
+  peekHintTimer = setTimeout(() => { hint.style.opacity = "0"; }, 3200);
+
+  if (!peekRv){
+    peekRv  = new kakao.maps.Roadview($("#peekView"));
+    peekRvc = new kakao.maps.RoadviewClient();
+  }
+  const pos = new kakao.maps.LatLng(sp.lat, sp.lng);
+
+  const show = (id) => {
+    $("#peekMsg").textContent = "";
+    peekPano = id;
+    peekRv.setPanoId(id, pos);
+    $("#peekNav").style.display = "flex";
+    setTimeout(() => { try { peekRv.relayout(); } catch(e){} }, 120);
+  };
+  const giveUp = () => {
+    $("#peekView").style.display = "none";
+    $("#peekNav").style.display = "none";
+    $("#peekMsg").textContent = (sp.name || "이곳") + "은\n거리 사진이 없는 곳이야";
+    hint.style.opacity = "0";
+  };
+
+  /* 가까운 곳부터, 없으면 좀 더 넓게 찾아본다 */
+  peekRvc.getNearestPanoId(pos, 120, (id) => {
+    if (id) return show(id);
+    peekRvc.getNearestPanoId(pos, 600, (id2) => id2 ? show(id2) : giveUp());
+  });
+}
+
+function closePeek(){
+  $("#peek").style.display = "none";
+  clearTimeout(peekHintTimer);
+}
+
+function peekWalk(){
+  if (!peekRv || !peekRvc || peekBusy) return;
+  let v, here;
+  try { v = peekRv.getViewpoint(); here = peekRv.getPosition(); } catch(e){ return; }
+  if (!here) return;
+
+  const btn = $("#peekWalk");
+  const rad = v.pan * Math.PI / 180;                 // pan 은 북쪽 기준 시계방향
+  const la = here.getLat(), ln = here.getLng();
+  const say = (t) => { btn.textContent = t; };
+  peekBusy = true; btn.disabled = true;
+
+  const done = (t) => {
+    peekBusy = false; btn.disabled = false;
+    if (t){ say(t); setTimeout(() => say("앞으로 걷기"), 1500); } else say("앞으로 걷기");
+  };
+
+  /* 앞쪽으로 조금씩 넓혀 가며 다음 사진을 찾는다 */
+  const step = (d, tries) => {
+    const lat = la + (d * Math.cos(rad)) / 111320;
+    const lng = ln + (d * Math.sin(rad)) / (111320 * Math.cos(la * Math.PI / 180));
+    const np = new kakao.maps.LatLng(lat, lng);
+    peekRvc.getNearestPanoId(np, Math.max(20, d * 0.9), (id) => {
+      if (id && id !== peekPano){
+        peekPano = id;
+        peekRv.setPanoId(id, np);
+        /* 고개는 걷던 방향 그대로 두어야 계속 앞으로 갈 수 있다 */
+        setTimeout(() => { try { peekRv.setViewpoint({ pan:v.pan, tilt:0, zoom:v.zoom }); } catch(e){} }, 160);
+        return done("");
+      }
+      if (tries < 3) return step(d + 25, tries + 1);
+      done("이 길은 여기까지야");
+    });
+  };
+  step(20, 0);
+}
+
+function peekTurn(deg){
+  if (!peekRv) return;
+  try {
+    const v = peekRv.getViewpoint();
+    peekRv.setViewpoint({ pan: (v.pan + deg + 360) % 360, tilt: v.tilt, zoom: v.zoom });
+  } catch(e){}
 }
 
 /* ── 로드뷰 (국내만) ── */
