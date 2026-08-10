@@ -334,7 +334,7 @@ const ROUTE_PROXY  = "route.php";                    // 같은 폴더의 PHP 프
 </div>
 
 <div class="wrap" id="setup" style="display:none">
-  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v46</span></p>
+  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v47</span></p>
   <div id="dots"></div>
 
   <section class="step" data-step="1">
@@ -762,9 +762,11 @@ function init(){
   const fmtMin = (m) => m < 60 ? m + "분"
     : (m % 60 ? Math.floor(m/60) + "시간 " + (m%60) + "분" : Math.floor(m/60) + "시간");
 
+  /* 걷기·뛰기는 시간당 걸음 수로 고릅니다 (보폭 걷기 0.7m · 뛰기 1.1m) */
+  const STRIDE = { walk: 0.7, run: 1.1 };
   const PACES = {
-    walk: [["천천히", 3], ["보통", 4], ["빠르게", 5.5]],
-    run:  [["가볍게", 8], ["보통", 11], ["빠르게", 14]],
+    walk: [["4,000보", 2.8], ["5,000보", 3.5], ["8,000보", 5.6], ["10,000보", 7.0]],
+    run:  [["6,000보", 6.6], ["8,000보", 8.8], ["10,000보", 11.0], ["12,000보", 13.2]],
     bike: [["천천히", 30], ["보통", 60]],
     car:  [["동네길", 40], ["보통", 60], ["빠르게", 85]],
   };
@@ -778,8 +780,8 @@ function init(){
     if (!pace || !list.some(x => x[1] === pace)) pace = list[Math.min(1, list.length-1)][1];
 
     const pb = $("#loopPace"); pb.innerHTML = "";
-    $("#paceLabel").textContent = (mode.id === "walk") ? "얼마나 빠르게 걸을래?"
-      : (mode.id === "run") ? "얼마나 빠르게 뛸래?" : "얼마나 빠르게?";
+    $("#paceLabel").textContent = (mode.id === "walk") ? "얼마나 빠르게 걸을래? (시간당 걸음 수)"
+      : (mode.id === "run") ? "얼마나 빠르게 뛸래? (시간당 걸음 수)" : "얼마나 빠르게?";
     list.forEach(([n, v]) => {
       const b = document.createElement("button");
       b.className = "chip";
@@ -794,8 +796,12 @@ function init(){
       const mins = Math.round(k / (pace || mode.kmh) * 60);
       const b = document.createElement("button");
       b.className = "chip";
-      b.innerHTML = `${k}km<br><small style="opacity:.6">${mins < 60 ? mins + "분"
-        : Math.floor(mins/60) + "시간" + (mins % 60 ? " " + (mins%60) + "분" : "")}</small>`;
+      const st = STRIDE[mode.id];
+      const steps = st ? Math.round(k * 1000 / st / 100) * 100 : 0;
+      const tTxt = mins < 60 ? mins + "분"
+        : Math.floor(mins/60) + "시간" + (mins % 60 ? " " + (mins%60) + "분" : "");
+      b.innerHTML = `${k}km<br><small style="opacity:.6">${tTxt}` +
+        (steps ? `<br>약 ${steps.toLocaleString()}보` : "") + `</small>`;
       b.setAttribute("aria-pressed", loopKm === k);
       b.onclick = async () => { loopKm = k; await check(); renderLoop(); };
       box.appendChild(b);
@@ -1952,7 +1958,7 @@ function applyName(n){
   loadHome();
   $("#intro").style.display = "none";
   $("#setup").style.display = "flex";
-  $("#brand").innerHTML = '창밖 여행 <span id="ver">v46</span>';
+  $("#brand").innerHTML = '창밖 여행 <span id="ver">v47</span>';
   if (window.showStep) window.showStep(1);
   if (window.renderKinds) window.renderKinds();
   const q1 = $("#q1"); if (q1) q1.innerHTML = voc(NAME) + ",<br>오늘 어디 가고 싶어?";
