@@ -1,0 +1,7 @@
+# 이 폴더만 UTF-8 로 내보냅니다 (사이트 나머지는 EUC-KR 그대로 유지)
+AddDefaultCharset UTF-8
+
+AddType "text/html; charset=UTF-8"        .html .htm
+AddType "application/json; charset=UTF-8" .json .webmanifest
+AddType "text/css; charset=UTF-8"         .css
+AddType "application/javascript; charset=UTF-8" .js
