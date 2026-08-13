@@ -126,7 +126,8 @@
   #ride{display:none;position:fixed;inset:0;background:#000}
   #scene{position:absolute;inset:0;display:none}
   #sat{position:absolute;inset:0;display:none;background:#0B0E11;z-index:1}
-  #road{position:absolute;inset:0;display:none;background:#0B0E11;z-index:1}
+  #road{position:absolute;inset:0;display:none;background:#0B0E11;z-index:1;
+    transform-origin:50% 46%;will-change:transform;overflow:hidden}
   #jump{position:absolute;right:14px;bottom:112px;z-index:8;display:none;align-items:center;gap:8px;
     height:52px;padding:0 18px 0 15px;border-radius:26px;border:1px solid #ffffff44;
     background:#0C1719D9;color:#F2EFE6;font-size:15px;font-family:inherit;backdrop-filter:blur(8px);
@@ -341,7 +342,7 @@
 </div>
 
 <div class="wrap" id="setup" style="display:none">
-  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v60</span></p>
+  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v61</span></p>
   <div id="dots"></div>
 
   <section class="step" data-step="1">
@@ -504,6 +505,7 @@ const MODES = [
   {id:"run",  name:"뛰기",   kmh: SP.run   || 11},
   {id:"bike", name:"오토바이", kmh: SP.bike  || 60},
   {id:"car",  name:"자동차", kmh: SP.car   || 85},
+  {id:"train",name:"기차",   kmh: SP.train || 150},
   {id:"boat", name:"배",     kmh: SP.boat  || 45},
   {id:"plane",name:"비행기", kmh: SP.plane || 850},
 ];
@@ -517,7 +519,8 @@ const RATES = [{n:"실시간",v:1},{n:"2배",v:2},{n:"3배",v:3},{n:"5배",v:5},
 /* 위치를 얼마나 자주 갱신할지 — 느리게 갈수록 촘촘하게 */
 function stepM(){
   const k = (typeof legs !== "undefined" && legs.length) ? legAt(travelled) : mode.id;
-  return (k === "walk") ? 6 : (k === "run") ? 10 : (k === "bike") ? 25 : 45;
+  return (k === "walk") ? 6 : (k === "run") ? 10 : (k === "bike") ? 25
+       : (k === "train") ? 60 : 45;
 }
 const STOP_SEC = 12;        // 휴게소 정차 시간(초)
 
@@ -786,6 +789,7 @@ function init(){
     run:  [["6,000보", 6.6], ["8,000보", 8.8], ["10,000보", 11.0], ["12,000보", 13.2]],
     bike: [["천천히", 30], ["보통", 60], ["빠르게", 90]],
     car:  [["천천히", 50], ["보통", 90], ["빠르게", 110], ["아주 빠르게", 150]],
+    train:[["무궁화호", 90], ["새마을호", 120], ["KTX", 250]],
   };
 
   function renderLoop(){
@@ -864,8 +868,9 @@ function init(){
     let list;
     if (loopMode) list = ["walk","run","bike","car"];
     else if (startM >= travelEndM - 100 && travelEndM > 0) list = ["walk","run","bike"];
-    else if (tripKind === "abroad") list = ["car"];
-    else if (needKm > 50) list = ["bike","car"];          // 50km 넘으면 걸어갈 수 없다
+    else if (tripKind === "abroad") list = ["car","train"];   // 공항까지 가는 길
+    else if (needKm > 150) list = ["car","train"];            // 오토바이로 갈 거리가 아니다
+    else if (needKm > 50) list = ["bike","car","train"];      // 50km 넘으면 걸어갈 수 없다
     else list = ["walk","run","bike","car"];
 
     list.map(id => MODES.find(m => m.id === id)).filter(Boolean).forEach(m => {
@@ -882,6 +887,7 @@ function init(){
     if (info) info.textContent =
       (startM >= travelEndM - 100 && travelEndM > 0) ? "도착해서 걸어 다닐 방법이야"
       : tripKind === "abroad" ? depName + "까지는 이걸로, 그 뒤엔 비행기"
+      : needKm > 150 ? "먼 길이야 · 기차를 타면 창밖으로 시골이 지나가"
       : "";
   }
 
@@ -1858,6 +1864,11 @@ const EV = {
   bus:    ["옆자리 승객이 잠들었습니다", "안내 방송이 짧게 흘러나옵니다",
            "버스가 천천히 차선을 바꿉니다"],
   car:    ["라디오 주파수가 잠깐 지직거립니다", "속도를 조금 올렸습니다"],
+  train:  ["덜컹, 하고 이음매를 지납니다", "창밖으로 논이 빠르게 스쳐 갑니다",
+           "맞은편 열차가 순식간에 지나갔습니다", "터널에 들어가 귀가 먹먹해집니다",
+           "다음 역을 알리는 방송이 나옵니다", "먼 산이 천천히 따라옵니다",
+           "간이역 하나가 스쳐 지나갑니다", "전봇대가 규칙적으로 지나갑니다",
+           "건널목 종소리가 멀어집니다", "커피 냄새가 객차에 퍼집니다"],
   walk:   ["발밑에서 자갈 밟히는 소리가 납니다", "잠시 서서 숨을 골랐습니다"],
   boat:   ["갈매기가 배를 따라옵니다", "파도에 배가 천천히 흔들립니다",
            "수평선 말고는 아무것도 없습니다", "짠 바람이 얼굴에 닿습니다",
@@ -1884,10 +1895,16 @@ function pickEvent(){
     const sky = EV.sky.concat(EV.plane || []);
     return sky[Math.floor(Math.random() * sky.length)];
   }
+  if (k === "train"){                  // 기차는 도로 이야기가 안 어울린다
+    const t = EV.train.concat(EV[curTheme] || []);
+    if (EV[weather.kind]) t.push.apply(t, EV[weather.kind]);
+    if (h >= 20 || h < 6) t.push.apply(t, EV.night);
+    return t[Math.floor(Math.random() * t.length)];
+  }
   const pool = [].concat(EV.common, EV[curTheme] || []);
   if (EV[weather.kind]) pool.push.apply(pool, EV[weather.kind]);
   if (h >= 20 || h < 6) pool.push.apply(pool, EV.night);
-  if (EV[mode.id]) pool.push.apply(pool, EV[mode.id]);
+  if (EV[k]) pool.push.apply(pool, EV[k]);   // 지금 타고 있는 것 기준
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
@@ -1931,13 +1948,16 @@ function renderStamps(){
 }
 
 /* 다음 이정표 — 공항 · 도착지 · 명소 */
-function onArriveYes(){
+async function onArriveYes(){
     $("#arrive").style.display = "none";
     const ok = spots.filter(sp => typeof sp.lat === "number" && typeof sp.lng === "number");
     const first = spots[tourFirst];
     const order = (first && typeof first.lat === "number")
       ? [first, ...ok.filter(sp => sp !== first)] : ok;
-    if (order.length) rebuildTour(order, tourKmh);
+    if (order.length){
+      banner("둘러보러 가자", "걸어갈 길을 만드는 중…");
+      await rebuildTour(order, tourKmh);
+    }
     mode = MODES.find(m => m.kmh === tourKmh) || MODES.find(m => m.id === "walk");
     if (waitStart){ pausedSec += (Date.now() - waitStart) / 1000 * rate; waitStart = 0; }
 
@@ -2370,7 +2390,7 @@ async function loadRoute(){
         push(road2 || greatCircle(land, to, 30), 60, "car");   // 공항에서 시내까지
       }
     } else {
-      const road = await roadPath(from, to);
+      const road = await roadPath(from, to, mode.id);   // 걷기면 인도·횡단보도로
       push(road || greatCircle(from, to, 80), curKmh(), mode.id);   // 고른 속도를 그대로 쓴다
     }
   }
@@ -2387,16 +2407,18 @@ async function loadRoute(){
   } catch(e){}
 
   let cur = { lat:city.lat, lng:city.lng };
-  const picked = [];
-  list.filter(x => x.lat && x.lng).slice(0, 10).forEach(x => {
-    if (picked.length >= 5) return;
-    if (metres(cur, x) < 250) return;
-    picked.push(x);
-    push(greatCircle(cur, x, 24), 10, "walk");
+  let picked = 0;
+  for (const x of list.filter(x => x.lat && x.lng).slice(0, 10)){
+    if (picked >= 5) break;
+    if (metres(cur, x) < 250) continue;
+    picked++;
+    /* 명소 사이도 직선이 아니라 실제 인도로 걷는다 */
+    const walk = await roadPath(cur, { lat:x.lat, lng:x.lng }, "walk");
+    push(walk || greatCircle(cur, x, 24), 10, "walk");
     cur = { lat:x.lat, lng:x.lng };
     spots.push({ name:x.title, desc:x.desc, img:x.img, lat:x.lat, lng:x.lng,
                  m: legs.reduce((a,l) => a + l.len, 0) });
-  });
+  }
 
   if (!seg.length) throw new Error("길이 없습니다");
   path = [].concat(...seg);
@@ -2417,13 +2439,12 @@ async function loopPath(home, km){
       wps.push({ lat: cen.lat + Math.sin(a) * dLat, lng: cen.lng + Math.cos(a) * dLng });
     }
     const all = via ? [home, via, ...wps, via, home] : [home, ...wps, home];
-    try {
-      const coords = all.map(p => `${p.lng},${p.lat}`).join(";");
-      const u = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
-      const j = await (await fetch(u)).json();
-      if (j.routes && j.routes[0])
-        return j.routes[0].geometry.coordinates.map(c => ({ lng:c[0], lat:c[1] }));
-    } catch(e){}
+    const coords = all.map(p => `${p.lng},${p.lat}`).join(";");
+    /* 동네 한 바퀴는 대개 걷기 — 차도가 아니라 인도·산책로로 돈다 */
+    const bases = onFootKind(mode.id) ? [OSRM_FOOT, OSRM_CAR] : [OSRM_CAR];
+    for (const base of bases){
+      try { const p = await osrmRoute(base, coords); if (p) return p; } catch(e){}
+    }
     const out = [];
     if (via) out.push(home);
     for (let i = 0; i <= 72; i++){
@@ -2448,15 +2469,27 @@ async function loopPath(home, km){
   return best;
 }
 
-/* 도로 경로 한 구간 */
-async function roadPath(a, b){
-  try {
-    const u = `https://router.project-osrm.org/route/v1/driving/`
-            + `${a.lng},${a.lat};${b.lng},${b.lat}?overview=full&geometries=geojson`;
-    const j = await (await fetch(u)).json();
-    if (j.routes && j.routes[0])
-      return j.routes[0].geometry.coordinates.map(c => ({ lng:c[0], lat:c[1] }));
-  } catch(e){}
+/* ── 길찾기 서버 ──
+   걷거나 뛸 때는 사람이 다니는 길(인도·횡단보도·공원길)로 가야 진짜 걷는 것 같다.
+   공개 OSRM 데모 서버는 자동차만 되므로, 보행자는 OSM 커뮤니티 서버를 쓴다. */
+const OSRM_FOOT = "https://routing.openstreetmap.de/routed-foot/route/v1/foot/";
+const OSRM_CAR  = "https://router.project-osrm.org/route/v1/driving/";
+const onFootKind = (k) => (k === "walk" || k === "run");
+
+async function osrmRoute(base, coords){
+  const j = await (await fetch(`${base}${coords}?overview=full&geometries=geojson`)).json();
+  if (j.routes && j.routes[0])
+    return j.routes[0].geometry.coordinates.map(c => ({ lng:c[0], lat:c[1] }));
+  return null;
+}
+
+/* 도로(또는 인도) 경로 한 구간. 보행자 서버가 안 되면 자동차 길로라도 간다. */
+async function roadPath(a, b, kind){
+  const coords = `${a.lng},${a.lat};${b.lng},${b.lat}`;
+  const bases = onFootKind(kind) ? [OSRM_FOOT, OSRM_CAR] : [OSRM_CAR];
+  for (const base of bases){
+    try { const p = await osrmRoute(base, coords); if (p) return p; } catch(e){}
+  }
   return null;
 }
 
@@ -2591,9 +2624,17 @@ function buildMiniWorld(){
 /* 걸어 다닐 때는 거리뷰가 기본 */
 function pickFirstView(){
   const k = legs.length ? legAt(startM) : mode.id;
+  if (k === "train"){ viewMode = "draw"; return; }        // 기차는 창밖 시골 전경
   const onFoot = (k === "walk" || k === "run" || k === "bike");
   if (onFoot && roadOK()) viewMode = "road";
   else if (viewMode === "road" && !roadOK()) viewMode = "map";
+}
+
+/* 기차 창밖 — 도심 테마는 어울리지 않으니 들판으로 바꿔 준다 */
+function trainView(){
+  if (!curTheme || curTheme === "metro" || curTheme === "sky") curTheme = "plain";
+  if (viewMode !== "draw"){ viewMode = "draw"; applyView(); }
+  else if (sceneOn) buildScene(curTheme);
 }
 
 function buildMap(){
@@ -3051,6 +3092,141 @@ function carSVG(){
     <circle cx="-4.2" cy="-1.6" r="1.7" fill="#26302F"/><circle cx="4.2" cy="-1.6" r="1.7" fill="#26302F"/></g></svg>`;
 }
 
+/* ── 뒤에서 본 모습 (거리뷰 전용) ──
+   앞으로 나아가는 화면이므로 옆모습을 쓰면 게걸음처럼 보인다. */
+function girlBackSVG(fast){
+  const dur = fast ? "0.5s" : "0.84s", A = fast ? 26 : 17;
+  const sw = (x,y,cx,cy) => `<animateTransform attributeName="transform" type="rotate"
+    values="${x} ${cx} ${cy};${y} ${cx} ${cy};${x} ${cx} ${cy}" dur="${dur}" repeatCount="indefinite"/>`;
+  const HAIR = "#3B2B27", HAIR2 = "#503A33", SKIN = "#FFE3C9", SKIN2 = "#F3CBAC";
+  const BAG = "#242832", BAG2 = "#333947", TOP = "#232E52", TRIM = "#F2F4F8";
+  const SKIRT = "#C2C5CC", BAND = "#2B3559", PLEAT = "#9DA2AC", SOCK = "#FFFFFF", SHOE = "#26262A";
+  return `<svg viewBox="-13 -28 26 30" preserveAspectRatio="xMidYMax meet" xmlns="http://www.w3.org/2000/svg">
+  <ellipse cy="0.7" rx="5" ry="1.2" fill="#000" opacity=".26"/>
+  <g><animateTransform attributeName="transform" type="translate"
+      values="0 0;0 -0.5;0 0;0 -0.5;0 0" dur="${dur}" repeatCount="indefinite"/>
+
+    <!-- 다리 (뒤에서 보면 좌우로 스치듯 교차한다) -->
+    <g>${sw(-A,A,-1.1,-5.9)}
+      <rect x="-2.1" y="-6" width="1.8" height="5" rx=".85" fill="${SKIN2}"/>
+      <rect x="-2.1" y="-2.5" width="1.8" height="1.3" rx=".4" fill="${SOCK}"/>
+      <rect x="-2.4" y="-1.4" width="2.5" height="1.2" rx=".5" fill="${SHOE}"/></g>
+    <g>${sw(A,-A,1.1,-5.9)}
+      <rect x="0.3" y="-6" width="1.8" height="5" rx=".85" fill="${SKIN}"/>
+      <rect x="0.3" y="-2.5" width="1.8" height="1.3" rx=".4" fill="${SOCK}"/>
+      <rect x="-0.1" y="-1.4" width="2.5" height="1.2" rx=".5" fill="${SHOE}"/></g>
+
+    <!-- 주름치마 -->
+    <g>${sw(2.5,-2.5,0,-9.5)}
+      <path d="M-3 -9.6 L3 -9.6 L4.3 -5.3 L-4.3 -5.3 Z" fill="${SKIRT}"/>
+      <path d="M-3.72 -7.0 L3.72 -7.0 L3.98 -6.2 L-3.98 -6.2 Z" fill="${BAND}"/>
+      <path d="M-1.5 -9.6 L-2.2 -5.3 M0 -9.6 L0 -5.3 M1.5 -9.6 L2.2 -5.3 M-2.7 -9.6 L-3.5 -5.3 M2.7 -9.6 L3.5 -5.3"
+            stroke="${PLEAT}" stroke-width=".26" opacity=".85"/></g>
+
+    <!-- 상의 -->
+    <path d="M-2.85 -13.7 L2.85 -13.7 L3.05 -9.3 L-3.05 -9.3 Z" fill="${TOP}"/>
+    <rect x="-3.05" y="-10" width="6.1" height=".45" fill="${TRIM}" opacity=".85"/>
+
+    <!-- 팔 -->
+    <g>${sw(A,-A,-2.95,-13)}
+      <rect x="-3.6" y="-13.1" width="1.4" height="2.6" rx=".6" fill="${TOP}"/>
+      <rect x="-3.45" y="-10.4" width="1.1" height="1.9" rx=".5" fill="${SKIN2}"/>
+      <circle cx="-2.9" cy="-8.5" r=".85" fill="${SKIN2}"/></g>
+    <g>${sw(-A,A,2.95,-13)}
+      <rect x="2.2" y="-13.1" width="1.4" height="2.6" rx=".6" fill="${TOP}"/>
+      <rect x="2.35" y="-10.4" width="1.1" height="1.9" rx=".5" fill="${SKIN}"/>
+      <circle cx="2.9" cy="-8.5" r=".85" fill="${SKIN}"/></g>
+
+    <!-- 목 -->
+    <rect x="-.65" y="-14.9" width="1.3" height="1.2" fill="${SKIN2}"/>
+
+    <!-- 뒤로 흘러내린 긴 머리 (팔이 보이도록 어깨보다 좁게) -->
+    <path d="M-3.3 -19.2 Q-3.9 -14 -3.1 -10.2 L3.1 -10.2 Q3.9 -14 3.3 -19.2 Z" fill="${HAIR}"/>
+    <ellipse cx="0" cy="-19.4" rx="3.8" ry="4.3" fill="${HAIR}"/>
+    <path d="M-2.3 -22.1 Q0 -23.3 2.3 -22.1" stroke="${HAIR2}" stroke-width=".45" fill="none" opacity=".7"/>
+    <path d="M-1.4 -20.4 L-1.7 -10.6 M0 -20.6 L0 -10.5 M1.4 -20.4 L1.7 -10.6"
+          stroke="${HAIR2}" stroke-width=".3" opacity=".45"/>
+
+    <!-- 백팩 — 머리 위에 그려야 가방을 멘 것처럼 보인다 -->
+    <rect x="-3.5" y="-13.6" width="7" height="6.4" rx="1.6" fill="${BAG}"/>
+    <rect x="-3.5" y="-13.6" width="7" height="2.1" rx="1.35" fill="${BAG2}"/>
+    <rect x="-1.1" y="-11.3" width="2.2" height="1.3" rx=".5" fill="#8E97A6"/>
+    <rect x="-3.5" y="-9.4" width="7" height=".5" fill="#1A1D24"/>
+    <rect x="-2.25" y="-14.6" width=".95" height="1.3" rx=".4" fill="${BAG2}"/>
+    <rect x="1.3"   y="-14.6" width=".95" height="1.3" rx=".4" fill="${BAG2}"/>
+  </g></svg>`;
+}
+
+function carBackSVG(){
+  return `<svg viewBox="-10 -12 20 13" preserveAspectRatio="xMidYMax meet" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cy="0.5" rx="7.4" ry="1.2" fill="#000" opacity=".3"/>
+    <g><animateTransform attributeName="transform" type="translate" values="0 0;0 -.22;0 0" dur=".55s" repeatCount="indefinite"/>
+    <rect x="-7.6" y="-3" width="1.7" height="2.6" rx=".5" fill="#26302F"/>
+    <rect x="5.9"  y="-3" width="1.7" height="2.6" rx=".5" fill="#26302F"/>
+    <path d="M-6.8 -1.2 L-6.8 -8.3 Q-6.8 -10 -5.1 -10 L5.1 -10 Q6.8 -10 6.8 -8.3 L6.8 -1.2 Z" fill="#E4572E"/>
+    <path d="M-5.2 -9 L5.2 -9 L5.2 -5.3 L-5.2 -5.3 Z" fill="#2A3B44"/>
+    <path d="M-4.9 -8.7 L-1.4 -8.7 L-2.6 -5.6 L-4.9 -5.6 Z" fill="#41586A" opacity=".7"/>
+    <rect x="-6.9" y="-4.4" width="2.7" height="1.6" rx=".5" fill="#FFC98C"/>
+    <rect x="4.2"  y="-4.4" width="2.7" height="1.6" rx=".5" fill="#FFC98C"/>
+    <rect x="-1.9" y="-3.5" width="3.8" height="1.3" rx=".3" fill="#E4E8E4"/>
+    <rect x="-6.9" y="-2.2" width="13.8" height=".9" rx=".4" fill="#B8402A"/>
+    </g></svg>`;
+}
+
+function bikeBackSVG(){
+  return `<svg viewBox="-9 -15 18 16" preserveAspectRatio="xMidYMax meet" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cy="0.5" rx="3.6" ry="1" fill="#000" opacity=".28"/>
+    <g><animateTransform attributeName="transform" type="translate" values="0 0;0 -.28;0 0" dur=".42s" repeatCount="indefinite"/>
+    <rect x="-1.5" y="-4.6" width="3" height="4.8" rx="1" fill="#26302F"/>
+    <rect x="-2.6" y="-6.4" width="5.2" height="2.2" rx=".8" fill="#E4572E"/>
+    <rect x="-3.4" y="-5.4" width="1" height="1.5" rx=".4" fill="#C0392B"/>
+    <rect x="2.4"  y="-5.4" width="1" height="1.5" rx=".4" fill="#C0392B"/>
+    <path d="M-3.4 -8.6 L3.4 -8.6 L2.9 -6.2 L-2.9 -6.2 Z" fill="#2A5A6E"/>
+    <path d="M-3.4 -8.6 L-4.4 -6.8 L-3.2 -6.4 L-2.6 -8.2 Z" fill="#2A5A6E"/>
+    <path d="M3.4 -8.6 L4.4 -6.8 L3.2 -6.4 L2.6 -8.2 Z" fill="#2A5A6E"/>
+    <circle cx="-3.8" cy="-6.4" r=".75" fill="#FFE3C9"/>
+    <circle cx="3.8"  cy="-6.4" r=".75" fill="#FFE3C9"/>
+    <circle cx="0" cy="-10.6" r="1.75" fill="#3A424A"/>
+    <path d="M-1.75 -10.9 a1.75 1.75 0 0 1 3.5 0 l0 -.5 a1.75 1.75 0 0 0 -3.5 0 Z" fill="#E4572E"/>
+    <rect x="-1.1" y="-9.9" width="2.2" height=".7" rx=".3" fill="#8FB4C4" opacity=".8"/>
+    <rect x="-.8" y="-3.4" width="1.6" height="1" rx=".3" fill="#E4E8E4"/>
+    </g></svg>`;
+}
+
+/* ── 기차 ── */
+function trainSVG(){
+  return `<svg viewBox="-16 -12 32 14" preserveAspectRatio="xMidYMax meet" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cy="0.6" rx="13" ry="1.2" fill="#000" opacity=".26"/>
+    <g><animateTransform attributeName="transform" type="translate" values="0 0;0 -.22;0 0" dur=".7s" repeatCount="indefinite"/>
+    <path d="M-13 -1.6 L-13 -7 Q-13 -9.4 -10.4 -9.4 L8.4 -9.4 Q12 -9.4 13 -6.2 L13 -1.6 Z" fill="#E9EEE9"/>
+    <path d="M4 -9.3 Q11.4 -9.2 12.6 -6.2 L13 -4.6 L4 -4.6 Z" fill="#3E6E8E"/>
+    <rect x="-13" y="-4.4" width="26" height="1.5" fill="#2A5A6E"/>
+    <g fill="#7FB4C4">
+      <rect x="-11.6" y="-8" width="3" height="2.6" rx=".4"/><rect x="-7.6" y="-8" width="3" height="2.6" rx=".4"/>
+      <rect x="-3.6" y="-8" width="3" height="2.6" rx=".4"/><rect x="0.4" y="-8" width="3" height="2.6" rx=".4"/>
+      <rect x="5.6" y="-8.2" width="4.6" height="2.6" rx=".8" fill="#BFE0EA"/></g>
+    <circle cx="12.2" cy="-3" r=".8" fill="#FFF3C4"/>
+    <g fill="#26302F"><circle cx="-9.5" cy="-1.2" r="1.3"/><circle cx="-6" cy="-1.2" r="1.3"/>
+      <circle cx="6" cy="-1.2" r="1.3"/><circle cx="9.5" cy="-1.2" r="1.3"/></g>
+    </g></svg>`;
+}
+
+function trainBackSVG(){
+  return `<svg viewBox="-10 -13 20 14" preserveAspectRatio="xMidYMax meet" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cy="0.5" rx="7.6" ry="1.1" fill="#000" opacity=".3"/>
+    <g><animateTransform attributeName="transform" type="translate" values="0 0;0 -.2;0 0" dur=".7s" repeatCount="indefinite"/>
+    <path d="M-7.2 -1 L-7.2 -9.4 Q-7.2 -11.4 -5.2 -11.4 L5.2 -11.4 Q7.2 -11.4 7.2 -9.4 L7.2 -1 Z" fill="#E9EEE9"/>
+    <path d="M-5.6 -10.2 L5.6 -10.2 L5.6 -6 L-5.6 -6 Z" fill="#3E6E8E"/>
+    <path d="M-5.3 -9.9 L-1.4 -9.9 L-2.8 -6.3 L-5.3 -6.3 Z" fill="#5E8CA8" opacity=".65"/>
+    <rect x="-7.2" y="-5.2" width="14.4" height="1.4" fill="#2A5A6E"/>
+    <rect x="-6.4" y="-3.4" width="2.4" height="1.5" rx=".5" fill="#E45A4A"/>
+    <rect x="4"    y="-3.4" width="2.4" height="1.5" rx=".5" fill="#E45A4A"/>
+    <rect x="-1.6" y="-3.2" width="3.2" height="1.2" rx=".3" fill="#D8DCDC"/>
+    <rect x="-7.2" y="-1.6" width="14.4" height=".8" fill="#9AA2A6"/>
+    <rect x="-0.5" y="-13" width="1" height="1.7" fill="#8C949A"/>
+    </g></svg>`;
+}
+
 function planeSVG(){
   return `<svg viewBox="-12 -12 24 24" xmlns="http://www.w3.org/2000/svg">
     <g><animateTransform attributeName="transform" type="translate" values="0 0;0 -.6;0 0" dur="2.4s" repeatCount="indefinite"/>
@@ -3061,21 +3237,36 @@ function planeSVG(){
 function setAvatar(){
   const el = $("#avatar");
   const on = (viewMode === "map" || viewMode === "road");
-  el.classList.toggle("onroad", viewMode === "road");
-  el.style.top = (viewMode === "road") ? "92%" : "50%";   // 발이 노면에 닿게
+  const road = (viewMode === "road");
+  el.classList.toggle("onroad", road);
+  el.style.top = road ? "92%" : "50%";   // 발이(바퀴가) 노면에 닿게
   /* 거리뷰는 이름표를 머리 위에 두려고 flex 를 쓴다 (인라인 display 가 CSS 를 덮으므로 여기서 정한다) */
-  el.style.display = on ? (viewMode === "road" ? "flex" : "block") : "none";
+  el.style.display = on ? (road ? "flex" : "block") : "none";
   if (!on) return;
   const k = legs.length ? legAt(travelled) : mode.id;
-  const art = k === "plane" ? planeSVG() : k === "boat" ? boatSVG()
-    : (k === "walk" || k === "run") ? girlSVG(k === "run")
-    : k === "bike" ? bikeSVG() : carSVG();
+  const onFoot = (k === "walk" || k === "run");
+
+  /* 거리뷰는 뒤에서 따라가며 보는 화면이라 뒷모습을 쓴다 — 옆으로 가는 것처럼 보이지 않게.
+     지도는 위에서 내려다보므로 옆모습 그대로. */
+  const art = road
+    ? (k === "plane" ? planeSVG() : k === "boat" ? boatSVG()
+       : k === "train" ? trainBackSVG()
+       : onFoot ? girlBackSVG(k === "run")
+       : k === "bike" ? bikeBackSVG() : carBackSVG())
+    : (k === "plane" ? planeSVG() : k === "boat" ? boatSVG()
+       : k === "train" ? trainSVG()
+       : onFoot ? girlSVG(k === "run")
+       : k === "bike" ? bikeSVG() : carSVG());
+
+  /* 걷거나 뛸 때만 인도로, 탈것은 차로 한가운데 */
+  el.style.left = road ? (onFoot ? "72%" : "50%") : "50%";
   el.innerHTML = art + (NAME ? `<b>${esc(NAME)}</b>` : "");
 }
 
 function faceAvatar(pan){
   const g = $("#avatar").querySelector("svg");
   if (!g) return;
+  if (viewMode === "road"){ g.style.transform = ""; return; }  // 뒷모습이라 뒤집지 않는다
   const kk = legs.length ? legAt(travelled) : mode.id;
   g.style.transform = (kk === "plane" || kk === "boat")
     ? `rotate(${(pan || 0).toFixed(0)}deg)`
@@ -3172,7 +3363,8 @@ function fillArriveMarks(){
 }
 
 /* 도착 후 관광 구간을 다시 짠다 */
-function rebuildTour(order, kmh){
+async function rebuildTour(order, kmh){
+  const kind = kmh > 20 ? "car" : "walk";
   let cut = path.length - 1;
   for (let i = 0; i < cum.length; i++){ if (cum[i] >= travelEndM){ cut = i; break; } }
   const head = path.slice(0, Math.max(2, cut + 1));
@@ -3184,17 +3376,19 @@ function rebuildTour(order, kmh){
   const out = head.slice();
   const newLegs = travelLegs.slice();
   const newSpots = [];
-  order.forEach(sp => {
-    if (typeof sp.lat !== "number" || typeof sp.lng !== "number") return;
-    const line = greatCircle(cur, { lat:sp.lat, lng:sp.lng }, 24);
+  for (const sp of order){
+    if (typeof sp.lat !== "number" || typeof sp.lng !== "number") continue;
+    /* 명소에서 명소로 가는 길도 실제 인도(차면 도로)를 따라간다 */
+    const line = (await roadPath(cur, { lat:sp.lat, lng:sp.lng }, kind))
+              || greatCircle(cur, { lat:sp.lat, lng:sp.lng }, 24);
     let len = 0;
     for (let i = 1; i < line.length; i++) len += metres(line[i-1], line[i]);
-    if (len < 30) return;
+    if (len < 30) continue;
     out.push(...line.slice(1));
-    newLegs.push({ len, kmh, kind: kmh > 20 ? "car" : "walk" });
+    newLegs.push({ len, kmh, kind });
     cur = { lat:sp.lat, lng:sp.lng };
     newSpots.push({ ...sp, seen:false, m: newLegs.reduce((a,l) => a + l.len, 0) });
-  });
+  }
   const keepPath = path, keepLegs = legs, keepSpots = spots, keepCum = cum, keepTotal = totalM;
   path = out; legs = newLegs; spots = newSpots;
   cum = [0];
@@ -3312,12 +3506,33 @@ function buildRoad(){
   rvc = new kakao.maps.RoadviewClient();
 }
 
+/* 로드뷰 사진은 10~20m 간격이라 그대로 두면 뚝뚝 끊겨 제자리걸음처럼 보인다.
+   사진과 사진 사이에는 화면을 아주 천천히 확대해 앞으로 나아가는 느낌을 만든다. */
+function roadDolly(){
+  const el = $("#road");
+  if (!el) return;
+  el.style.transition = "none";
+  el.style.transform = "scale(1)";
+  void el.offsetWidth;                       // 되감기를 즉시 반영시킨다
+  const k = legs.length ? legAt(travelled) : mode.id;
+  const secs = (k === "walk") ? 7 : (k === "run") ? 4.5 : 3;
+  el.style.transition = `transform ${secs}s linear`;
+  el.style.transform = "scale(1.2)";
+}
+function roadDollyStop(){
+  const el = $("#road");
+  if (!el) return;
+  el.style.transition = "none";
+  el.style.transform = "none";
+}
+
 function roadStep(p){
   if (!rv || !rvc) return;
   const k = legs.length ? legAt(travelled) : mode.id;
-  const step = (k === "walk") ? 8 : (k === "run") ? 15 : (k === "bike") ? 40 : 70;
+  const step = (k === "walk") ? 7 : (k === "run") ? 12 : (k === "bike") ? 20 : 28;
   const now = Date.now();
-  if (Math.abs(travelled - panoAt) < step && now - panoTime < 9000) return;
+  if (now - panoTime < 420) return;                   // 초당 두 장 남짓이 한계
+  if (Math.abs(travelled - panoAt) < step && now - panoTime < 6000) return;
   panoTime = now;
   panoAt = travelled;
   const pos = new kakao.maps.LatLng(p.lat, p.lng);
@@ -3325,7 +3540,8 @@ function roadStep(p){
     if (!id || id === lastPano) return;
     lastPano = id;
     rv.setPanoId(id, pos);
-    setTimeout(() => { try { rv.setViewpoint({ pan:p.pan || 0, tilt:0, zoom:0 }); } catch(e){} }, 140);
+    roadDolly();                                      // 사진이 바뀌었으니 다시 다가가기 시작
+    setTimeout(() => { try { rv.setViewpoint({ pan:p.pan || 0, tilt:0, zoom:0 }); } catch(e){} }, 90);
   });
 }
 
@@ -3706,7 +3922,8 @@ function applyView(){
   const satOn = (viewMode === "map");
   const roadOn = (viewMode === "road");
   $("#road").style.display = roadOn ? "block" : "none";
-  if (roadOn){ buildRoad(); panoAt = -1e9; lastPano = null; }
+  if (roadOn){ buildRoad(); panoAt = -1e9; lastPano = null; roadDolly(); }
+  else roadDollyStop();
   setAvatar();
   $("#scene").style.display = sceneOn ? "block" : "none";
   $("#sat").style.display   = satOn ? "block" : "none";
@@ -3808,12 +4025,17 @@ function jumpInner(m){
   {
     const leg = legAt(m);
     if (leg !== legNow){
+      const prev = legNow;
       legNow = leg;
       setAvatar();
-      if (leg === "air"){
-        if (groundM > 0) banner(depName, isBoat() ? "이제 배를 탑니다" : "이제 비행기를 탑니다");
-
+      if ((leg === "plane" || leg === "boat") && groundM > 0 && prev)
+        banner(depName, leg === "boat" ? "이제 배를 탑니다" : "이제 비행기를 탑니다");
+      if (leg === "train"){
+        if (prev) banner("기차를 탔어", "창밖으로 시골이 지나간다");
+        trainView();
       }
+      if (leg === "walk" && prev && prev !== "run")
+        banner("여기부터는 걸어서", "천천히 둘러보자");
     }
   }
   const sp = spots.find(x => !x.seen && m >= x.m - 40);
@@ -3861,7 +4083,8 @@ function jumpInner(m){
         saveStamp(sigun);
         if (seenSigun.indexOf(sigun) < 0) seenSigun.push(sigun);
         fetchWeather(p.lat, p.lng);
-        const th = themeOf(sido, sigun, dong);
+        let th = themeOf(sido, sigun, dong);
+        if (legNow === "train" && th === "metro") th = "plain";   // 기차 창밖은 시골로
         banner(sigun + " 진입", THEMES[th].note);
         if (sceneOn) buildScene(th); else curTheme = th;
       }
