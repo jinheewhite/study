@@ -159,16 +159,23 @@
        letter-spacing:.05em;text-shadow:0 1px 6px #000}
   #avatar{position:absolute;left:50%;top:50%;transform:translate(-50%,-100%);pointer-events:none;
     z-index:6;display:none;width:74px;text-align:center}
+  /* 같이 걷고 뛰는 사람들 — 혼자보다 러닝 크루처럼 */
+  #crew{position:absolute;inset:0;z-index:5;pointer-events:none;display:none}
+  #crew .mate{position:absolute;transform:translateX(-50%)}
+  #crew .mate svg{display:block;width:100%;height:auto;filter:drop-shadow(0 5px 12px #0008)}
   #avatar svg{width:74px;height:74px;display:block;filter:drop-shadow(0 4px 8px #0007)}
   #avatar b{display:block;margin-top:-4px;font-size:11px;font-weight:600;color:#fff;
     background:#E4572ECC;border-radius:999px;padding:3px 10px;text-shadow:0 1px 3px #0008}
   /* 거리뷰에서는 차도 한가운데가 아니라 오른쪽 인도를, 사람 크기로 걷는다.
      이름표는 아래에 두면 조작 바와 겹치므로 머리 위로 올린다. */
-  #avatar.onroad{left:72%;width:min(54vw,240px);
+  #avatar.onroad{width:min(54vw,240px);
     display:flex;flex-direction:column-reverse;align-items:center}
   #avatar.onroad svg{width:min(54vw,240px);height:min(54vw,240px);
     filter:drop-shadow(0 6px 14px #0009)}
   #avatar.onroad b{font-size:14px;margin:0 0 2px;padding:3px 13px}
+  /* 걸을 때는 차도가 아니라 갓길·인도 쪽으로 더 붙인다 */
+  #avatar.onroad.foot{left:81%;width:min(44vw,196px)}
+  #avatar.onroad.foot svg{width:min(44vw,196px);height:min(44vw,196px)}
   #fx{position:absolute;inset:0;pointer-events:none;z-index:3}
   #fx.rain:before,#fx.storm:before{content:"";position:absolute;inset:-20%;
     background:repeating-linear-gradient(105deg,#ffffff55 0 1px,#0000 1px 9px);
@@ -205,6 +212,9 @@
        pointer-events:none}
   #where{font-size:15px;text-shadow:0 1px 4px #000}
   #where small{display:block;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#B9D6D0;margin-bottom:4px}
+  /* 지나온 고장 — 어디를 거쳐 왔는지 계속 보이게 */
+  #where em{display:block;font-style:normal;font-size:11.5px;color:#9FC4BE;margin-top:5px;
+    max-width:64vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 1px 4px #000}
   #clock{font-size:32px;color:var(--dawn);text-shadow:0 1px 6px #000}
   #bar{position:absolute;left:0;right:0;bottom:0;z-index:7;padding:26px 18px calc(env(safe-area-inset-bottom) + 18px);
        background:linear-gradient(#0000,#000D)}
@@ -342,7 +352,7 @@
 </div>
 
 <div class="wrap" id="setup" style="display:none">
-  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v61</span></p>
+  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v62</span></p>
   <div id="dots"></div>
 
   <section class="step" data-step="1">
@@ -422,6 +432,7 @@
   <div id="scene"></div>
   <div id="sat"></div>
   <div id="road"></div>
+  <div id="crew"></div>
   <div id="avatar"></div>
   <div id="water"></div>
   <div id="fx"></div>
@@ -434,7 +445,7 @@
   <div id="mini"></div>
   <div id="eta"><div class="bar"><i></i></div><span></span></div>
   <div id="hud">
-    <div id="where"><small><span id="wx">·</span></small><span id="region">출발 준비</span></div>
+    <div id="where"><small><span id="wx">·</span></small><span id="region">출발 준비</span><em id="trail"></em></div>
     <div id="clock" class="mono">00:00</div>
   </div>
   <button id="jump"><span>⏭</span><b></b></button>
@@ -851,16 +862,18 @@ function init(){
     const box = $("#modes"); box.innerHTML = "";
     const info = $("#modeInfo");
 
-    /* 지금부터가 비행/배 구간이면 고를 것이 없다 */
-    const airAhead = travelEndM > 0 && groundM > 0 && startM >= groundM - 100 && startM < travelEndM - 100;
-    if (airAhead){
+    /* 이미 타고 갈 것이 정해진 구간(비행기·배·기차)이면 고를 것이 없다 */
+    const midLeg = travelEndM > 0 && groundM > 0 && startM >= groundM - 100 && startM < travelEndM - 100;
+    const aheadKind = midLeg && legs.length ? legAt(Math.min(travelEndM - 50, groundM + 50)) : "";
+    if (midLeg && (aheadKind === "plane" || aheadKind === "boat" || aheadKind === "train")){
+      const nm = aheadKind === "boat" ? "배" : aheadKind === "train" ? "기차" : "비행기";
       const b = document.createElement("button");
       b.className = "chip"; b.setAttribute("aria-pressed", "true");
-      b.innerHTML = (isBoat() ? "배" : "비행기") + `<br><small style="opacity:.6">${mode.kmh}km/h</small>`;
+      b.innerHTML = nm + `<br><small style="opacity:.6">${curKmh()}km/h</small>`;
       b.onclick = () => showStep(4);
       box.appendChild(b);
-      if (info) info.textContent = depName + "에서 " + (to ? to.name : "도착지") + "까지 " +
-                                   (isBoat() ? "배로 갑니다" : "비행기로 갑니다");
+      if (info) info.textContent = depName + "에서 " +
+        (arrName || (to ? to.name : "도착지")) + "까지 " + nm + "로 갑니다";
       return;
     }
 
@@ -934,6 +947,8 @@ function init(){
   window.renderKinds = renderKinds;
   /* 처음으로 돌아갈 때 여행 종류 선택도 지운다 (tripKind 는 이 안의 값이라 밖에서 못 건드린다) */
   window.resetKind = () => { tripKind = ""; renderKinds(); };
+  /* 동네 한 바퀴는 "서신천" 같은 동네 이름을 찾는 것이니 국내 검색을 먼저 쓴다 */
+  window.isLocalTrip = () => tripKind === "local";
   renderKinds();
   window.refreshNav = () => { if (canGo(step)) $("#warn").textContent = ""; };
   $("#prev").onclick = () => showStep(step - 1, -1);
@@ -1201,11 +1216,12 @@ function bindSearch(inputSel, listSel, pick, which){
     const q = inp.value.trim();
     if (q.length < 2){ box.innerHTML = ""; return; }
     t = setTimeout(async () => {
-      /* 집 주소는 국내부터, 가고 싶은 곳은 세계부터 찾는다.
-         (예전에는 둘 다 세계부터 찾아서 "서신동"에 엉뚱한 해외 지명이 떴다) */
+      /* 집 주소와 동네 한 바퀴는 국내부터, 멀리 가는 곳은 세계부터 찾는다.
+         (예전에는 "서신천"을 쳐도 세계 도시부터 뒤져서 엉뚱한 게 떴다) */
       const world = () => worldSearch(q).catch(() => []);
       const kakao_ = () => kakaoSearch(q);
-      const [first, second] = which === "from" ? [kakao_, world] : [world, kakao_];
+      const nearFirst = which === "from" || (window.isLocalTrip && window.isLocalTrip());
+      const [first, second] = nearFirst ? [kakao_, world] : [world, kakao_];
 
       let list = await first();
       if (!list.length) list = await second();
@@ -2321,7 +2337,7 @@ async function begin(){
 }
 
 async function loadRoute(){
-  legs = []; spots = []; pois = []; groundM = 0; travelEndM = 0;
+  legs = []; spots = []; pois = []; groundM = 0; travelEndM = 0; depName = ""; arrName = "";
 
   /* 갈 방법은 지리로 정한다 — 바다 건너면 비행기, 배로만 가는 섬이면 배 */
   if (!loopMode && from && to){
@@ -2388,6 +2404,32 @@ async function loadRoute(){
       if (land !== to){
         const road2 = await roadPath(land, to);
         push(road2 || greatCircle(land, to, 30), 60, "car");   // 공항에서 시내까지
+      }
+    } else if (isTrain()){
+      /* 기차는 역에서 탄다 — 집에서 역까지 가고, 역에서 역으로, 내려서 목적지까지 */
+      const dep = nearestStation(from), arr = nearestStation(to);
+      if (dep === arr){                       // 같은 역이면 기차 탈 일이 아니다
+        const road = await roadPath(from, to, "car");
+        push(road || greatCircle(from, to, 80), 60, "car");
+      } else {
+        depName = dep.name; arrName = arr.name;
+
+        const d0 = metres(from, dep);
+        if (d0 > 600){                        // 역까지 — 가까우면 걸어서, 멀면 자동차로
+          const kind = d0 < 2500 ? "walk" : "car";
+          const p0 = await roadPath(from, dep, kind);
+          push(p0 || greatCircle(from, dep, 30), kind === "walk" ? 4 : 60, kind);
+          groundM = legs.reduce((a, l) => a + l.len, 0);
+        }
+
+        /* 선로 자료가 없으니 역 사이 땅길을 따라간다 — 지나는 고장이 실제와 맞도록 */
+        const rail = await roadPath(dep, arr, "car");
+        push(rail || greatCircle(dep, arr, 120), curKmh(), "train");
+
+        if (metres(arr, to) > 500){           // 내린 역에서 목적지까지
+          const p2 = await roadPath(arr, to, "car");
+          push(p2 || greatCircle(arr, to, 30), 40, "car");
+        }
       }
     } else {
       const road = await roadPath(from, to, mode.id);   // 걷기면 인도·횡단보도로
@@ -2740,6 +2782,7 @@ function countdown(){
 /* ═══════════ 해외 · 비행 ═══════════ */
 const isPlane = () => mode.id === "plane";
 const isBoat  = () => mode.id === "boat";
+const isTrain = () => mode.id === "train";
 const inKorea = (p) => p.lat > 33 && p.lat < 38.7 && p.lng > 124.5 && p.lng < 131.9;
 
 /* 거리를 보고 알아서 고른다 — 가까우면 걷기, 멀면 자가용, 아주 멀거나 해외면 비행기 */
@@ -2769,6 +2812,48 @@ const AIRPORTS = [
 ];
 const nearestAirport = (p) =>
   AIRPORTS.reduce((a, b) => metres(p, b) < metres(p, a) ? b : a, AIRPORTS[0]);
+
+/* 기차역 — 집에서 가장 가까운 역에서 타고, 목적지에서 가장 가까운 역에 내립니다 */
+const STATIONS = [
+  { name:"서울역",     lat:37.5556, lng:126.9723 },
+  { name:"용산역",     lat:37.5299, lng:126.9648 },
+  { name:"청량리역",   lat:37.5800, lng:127.0470 },
+  { name:"광명역",     lat:37.4160, lng:126.8845 },
+  { name:"수원역",     lat:37.2660, lng:127.0000 },
+  { name:"천안아산역", lat:36.7946, lng:127.1045 },
+  { name:"오송역",     lat:36.6200, lng:127.3277 },
+  { name:"대전역",     lat:36.3320, lng:127.4342 },
+  { name:"공주역",     lat:36.3576, lng:127.0206 },
+  { name:"익산역",     lat:35.9385, lng:126.9603 },
+  { name:"전주역",     lat:35.8497, lng:127.1600 },
+  { name:"정읍역",     lat:35.5710, lng:126.8560 },
+  { name:"남원역",     lat:35.4110, lng:127.4090 },
+  { name:"순천역",     lat:34.9500, lng:127.4900 },
+  { name:"여수엑스포역", lat:34.7480, lng:127.7480 },
+  { name:"광주송정역", lat:35.1370, lng:126.7910 },
+  { name:"나주역",     lat:35.0170, lng:126.7160 },
+  { name:"목포역",     lat:34.7910, lng:126.3860 },
+  { name:"김천구미역", lat:36.1200, lng:128.1740 },
+  { name:"동대구역",   lat:35.8797, lng:128.6286 },
+  { name:"신경주역",   lat:35.7930, lng:129.1300 },
+  { name:"울산역",     lat:35.5510, lng:129.1370 },
+  { name:"부산역",     lat:35.1150, lng:129.0420 },
+  { name:"마산역",     lat:35.2270, lng:128.5720 },
+  { name:"창원중앙역", lat:35.2350, lng:128.6790 },
+  { name:"진주역",     lat:35.1730, lng:128.1160 },
+  { name:"포항역",     lat:36.0470, lng:129.3400 },
+  { name:"안동역",     lat:36.5620, lng:128.7280 },
+  { name:"영주역",     lat:36.8340, lng:128.6240 },
+  { name:"제천역",     lat:37.1420, lng:128.1930 },
+  { name:"서원주역",   lat:37.3390, lng:127.8830 },
+  { name:"평창역",     lat:37.5760, lng:128.3900 },
+  { name:"진부역",     lat:37.6540, lng:128.5670 },
+  { name:"강릉역",     lat:37.7640, lng:128.8990 },
+  { name:"동해역",     lat:37.5230, lng:129.1180 },
+  { name:"춘천역",     lat:37.8850, lng:127.7180 },
+];
+const nearestStation = (p) =>
+  STATIONS.reduce((a, b) => metres(p, b) < metres(p, a) ? b : a, STATIONS[0]);
 
 /* 여객선 항구 — 공항이 없는 섬은 배로 갑니다 */
 const PORTS = [
@@ -3092,6 +3177,58 @@ function carSVG(){
     <circle cx="-4.2" cy="-1.6" r="1.7" fill="#26302F"/><circle cx="4.2" cy="-1.6" r="1.7" fill="#26302F"/></g></svg>`;
 }
 
+/* ── 같이 걷고 뛰는 사람들 ──
+   요즘 러닝 크루처럼, 혼자가 아니라 옆에 두어 명이 함께 간다. */
+const CREW = [
+  { x:63, w:0.76, bottom:9.6,  dur:"0.9s",  hair:"#2E2A28", top:"#2B4C63", pants:"#1E2733", skin:"#F0CDAE" },
+  { x:71, w:0.63, bottom:11.4, dur:"0.76s", hair:"#4A3A2E", top:"#3E6B55", pants:"#2A2F38", skin:"#FFE3C9" },
+];
+
+function mateSVG(fast, c){
+  const dur = fast ? (parseFloat(c.dur) * 0.62).toFixed(2) + "s" : c.dur;
+  const A = fast ? 26 : 17;
+  const sw = (x,y,cx,cy) => `<animateTransform attributeName="transform" type="rotate"
+    values="${x} ${cx} ${cy};${y} ${cx} ${cy};${x} ${cx} ${cy}" dur="${dur}" repeatCount="indefinite"/>`;
+  return `<svg viewBox="-13 -28 26 30" preserveAspectRatio="xMidYMax meet" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cy="0.7" rx="4.3" ry="1.1" fill="#000" opacity=".24"/>
+    <g><animateTransform attributeName="transform" type="translate"
+        values="0 0;0 -0.5;0 0;0 -0.5;0 0" dur="${dur}" repeatCount="indefinite"/>
+      <g>${sw(-A,A,-1.1,-5.9)}
+        <rect x="-2" y="-6" width="1.7" height="5" rx=".8" fill="${c.skin}"/>
+        <rect x="-2.3" y="-1.4" width="2.4" height="1.2" rx=".5" fill="#2A2A2E"/></g>
+      <g>${sw(A,-A,1.1,-5.9)}
+        <rect x="0.3" y="-6" width="1.7" height="5" rx=".8" fill="${c.skin}"/>
+        <rect x="-0.1" y="-1.4" width="2.4" height="1.2" rx=".5" fill="#2A2A2E"/></g>
+      <path d="M-2.7 -10.6 L2.7 -10.6 L3 -5.7 L-3 -5.7 Z" fill="${c.pants}"/>
+      <path d="M-2.9 -14.1 L2.9 -14.1 L3.1 -10.1 L-3.1 -10.1 Z" fill="${c.top}"/>
+      <rect x="-3.1" y="-10.7" width="6.2" height=".4" fill="#FFFFFF" opacity=".5"/>
+      <g>${sw(A,-A,-3,-13.4)}
+        <rect x="-3.6" y="-13.5" width="1.4" height="2.7" rx=".6" fill="${c.top}"/>
+        <rect x="-3.45" y="-11" width="1.1" height="2" rx=".5" fill="${c.skin}"/>
+        <circle cx="-2.9" cy="-8.9" r=".8" fill="${c.skin}"/></g>
+      <g>${sw(-A,A,3,-13.4)}
+        <rect x="2.2" y="-13.5" width="1.4" height="2.7" rx=".6" fill="${c.top}"/>
+        <rect x="2.35" y="-11" width="1.1" height="2" rx=".5" fill="${c.skin}"/>
+        <circle cx="2.9" cy="-8.9" r=".8" fill="${c.skin}"/></g>
+      <rect x="-.6" y="-15.1" width="1.2" height="1.2" fill="${c.skin}"/>
+      <g>${sw(2.6,-2.6,0,-18.6)}
+        <path d="M-2.7 -18.6 Q-3.1 -15 -2.5 -12.2 L2.5 -12.2 Q3.1 -15 2.7 -18.6 Z" fill="${c.hair}"/></g>
+      <ellipse cx="0" cy="-18.4" rx="3.3" ry="3.7" fill="${c.hair}"/>
+    </g></svg>`;
+}
+
+/* 걸을 때·뛸 때만, 거리뷰에서만 함께 간다 */
+function paintCrew(show, fast){
+  const box = $("#crew");
+  if (!box) return;
+  if (!show){ box.style.display = "none"; box.innerHTML = ""; return; }
+  const base = Math.min(window.innerWidth * 0.44, 196);
+  box.style.display = "block";
+  box.innerHTML = CREW.map(c =>
+    `<div class="mate" style="left:${c.x}%;bottom:${c.bottom}%;width:${Math.round(base * c.w)}px">
+       ${mateSVG(fast, c)}</div>`).join("");
+}
+
 /* ── 뒤에서 본 모습 (거리뷰 전용) ──
    앞으로 나아가는 화면이므로 옆모습을 쓰면 게걸음처럼 보인다. */
 function girlBackSVG(fast){
@@ -3140,12 +3277,13 @@ function girlBackSVG(fast){
     <!-- 목 -->
     <rect x="-.65" y="-14.9" width="1.3" height="1.2" fill="${SKIN2}"/>
 
-    <!-- 뒤로 흘러내린 긴 머리 (팔이 보이도록 어깨보다 좁게) -->
-    <path d="M-3.3 -19.2 Q-3.9 -14 -3.1 -10.2 L3.1 -10.2 Q3.9 -14 3.3 -19.2 Z" fill="${HAIR}"/>
+    <!-- 뒤로 흘러내린 긴 머리 (팔이 보이도록 어깨보다 좁게) · 걸음에 맞춰 흔들린다 -->
+    <g>${sw(2.6,-2.6,0,-19.2)}
+      <path d="M-3.3 -19.2 Q-3.9 -14 -3.1 -10.2 L3.1 -10.2 Q3.9 -14 3.3 -19.2 Z" fill="${HAIR}"/>
+      <path d="M-1.4 -20.4 L-1.7 -10.6 M0 -20.6 L0 -10.5 M1.4 -20.4 L1.7 -10.6"
+            stroke="${HAIR2}" stroke-width=".3" opacity=".45"/></g>
     <ellipse cx="0" cy="-19.4" rx="3.8" ry="4.3" fill="${HAIR}"/>
     <path d="M-2.3 -22.1 Q0 -23.3 2.3 -22.1" stroke="${HAIR2}" stroke-width=".45" fill="none" opacity=".7"/>
-    <path d="M-1.4 -20.4 L-1.7 -10.6 M0 -20.6 L0 -10.5 M1.4 -20.4 L1.7 -10.6"
-          stroke="${HAIR2}" stroke-width=".3" opacity=".45"/>
 
     <!-- 백팩 — 머리 위에 그려야 가방을 멘 것처럼 보인다 -->
     <rect x="-3.5" y="-13.6" width="7" height="6.4" rx="1.6" fill="${BAG}"/>
@@ -3154,6 +3292,12 @@ function girlBackSVG(fast){
     <rect x="-3.5" y="-9.4" width="7" height=".5" fill="#1A1D24"/>
     <rect x="-2.25" y="-14.6" width=".95" height="1.3" rx=".4" fill="${BAG2}"/>
     <rect x="1.3"   y="-14.6" width=".95" height="1.3" rx=".4" fill="${BAG2}"/>
+
+    <!-- 가방 위로 흘러내려 휘날리는 옆머리 -->
+    <g>${sw(7,-7,-1.2,-19)}
+      <path d="M-3.4 -19.8 q-1.7 4.2 -1.3 8.6 q.15 1.7 .95 2.4 q-.25 -4.6 .85 -10.1 Z" fill="${HAIR}"/></g>
+    <g>${sw(-7,7,1.2,-19)}
+      <path d="M3.4 -19.8 q1.7 4.2 1.3 8.6 q-.15 1.7 -.95 2.4 q.25 -4.6 -.85 -10.1 Z" fill="${HAIR}"/></g>
   </g></svg>`;
 }
 
@@ -3242,7 +3386,7 @@ function setAvatar(){
   el.style.top = road ? "92%" : "50%";   // 발이(바퀴가) 노면에 닿게
   /* 거리뷰는 이름표를 머리 위에 두려고 flex 를 쓴다 (인라인 display 가 CSS 를 덮으므로 여기서 정한다) */
   el.style.display = on ? (road ? "flex" : "block") : "none";
-  if (!on) return;
+  if (!on){ paintCrew(false); return; }
   const k = legs.length ? legAt(travelled) : mode.id;
   const onFoot = (k === "walk" || k === "run");
 
@@ -3259,7 +3403,10 @@ function setAvatar(){
        : k === "bike" ? bikeSVG() : carSVG());
 
   /* 걷거나 뛸 때만 인도로, 탈것은 차로 한가운데 */
-  el.style.left = road ? (onFoot ? "72%" : "50%") : "50%";
+  paintCrew(road && onFoot, k === "run");
+  el.classList.toggle("foot", road && onFoot);
+  if (!(road && onFoot)) el.style.left = "50%";
+  else el.style.left = "";              // .foot 규칙이 정한다
   el.innerHTML = art + (NAME ? `<b>${esc(NAME)}</b>` : "");
 }
 
@@ -3949,6 +4096,7 @@ function run(){
   startTs = Date.now();
   want = startM; pausedSec = 0; legNow = ""; waitStart = 0; askedTour = (startM >= travelEndM);
   sessStart = travelled; sessRest = 0; sessTunnel = 0; seenSigun = []; arrivedShown = false;
+  lastRegion = ""; paintTrail();
   startEvents();
   startQuotes();
   startPlaces();
@@ -4031,7 +4179,8 @@ function jumpInner(m){
       if ((leg === "plane" || leg === "boat") && groundM > 0 && prev)
         banner(depName, leg === "boat" ? "이제 배를 탑니다" : "이제 비행기를 탑니다");
       if (leg === "train"){
-        if (prev) banner("기차를 탔어", "창밖으로 시골이 지나간다");
+        if (prev) banner(depName || "기차를 탔어",
+                         "이제 기차를 탑니다" + (arrName ? " · " + arrName + "까지" : ""));
         trainView();
       }
       if (leg === "walk" && prev && prev !== "run")
@@ -4079,9 +4228,10 @@ function jumpInner(m){
       if (changed && screenIsRiding()) showPlace();
       if (sigun && sigun !== lastRegion){
         lastRegion = sigun;
-        signText = sigun;
-        saveStamp(sigun);
-        if (seenSigun.indexOf(sigun) < 0) seenSigun.push(sigun);
+        /* 길가 표지판은 "천안시 동남구"가 아니라 "천안시"로 — 지나는 고장이 한눈에 보이게 */
+        signText = String(sigun).split(/\s+/)[0];
+        saveStamp(signText);
+        if (seenSigun.indexOf(signText) < 0){ seenSigun.push(signText); paintTrail(); }
         fetchWeather(p.lat, p.lng);
         let th = themeOf(sido, sigun, dong);
         if (legNow === "train" && th === "metro") th = "plain";   // 기차 창밖은 시골로
@@ -4136,6 +4286,13 @@ function jumpInner(m){
       banner(hit.name, "지나갑니다");
     }
   }
+}
+
+/* 지나온 고장을 화면 위에 계속 남겨 둔다 — "익산시 › 논산시 › 천안시" */
+function paintTrail(){
+  const el = $("#trail");
+  if (!el) return;
+  el.textContent = seenSigun.length ? seenSigun.slice(-5).join(" › ") : "";
 }
 
 function banner(title, sub){
