@@ -106,6 +106,11 @@
   #trailList button{display:block;width:100%;padding:13px 16px;border-radius:12px;border:1px solid var(--line);
     background:var(--panel);color:var(--paper);font-family:inherit;text-align:left;font-size:15px}
   #trailList button small{display:block;margin-top:4px;font-size:12px;color:var(--dim)}
+  #hotList{display:flex;flex-direction:column;gap:8px;margin-top:4px}
+  #hotList button{display:block;width:100%;padding:13px 16px;border-radius:12px;border:1px solid var(--line);
+    background:var(--panel);color:var(--paper);font-family:inherit;text-align:left;font-size:15px}
+  #hotList button small{display:block;margin-top:4px;font-size:12px;color:var(--dim)}
+  #hotList button b{color:var(--dawn);font-weight:600;font-size:12px;margin-right:2px}
   #tripList button{height:56px;border-radius:12px;border:1px solid var(--line);background:var(--panel);
     color:var(--paper);font-size:14px;font-family:inherit;line-height:1.4}
   #tripList button small{display:block;font-size:11px;color:var(--dim);margin-top:3px}
@@ -352,7 +357,7 @@
 </div>
 
 <div class="wrap" id="setup" style="display:none">
-  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v64</span></p>
+  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v65</span></p>
   <div id="dots"></div>
 
   <section class="step" data-step="1">
@@ -367,6 +372,8 @@
       <button id="justHere" style="display:none">여기서 그냥 돌래</button>
       <p class="tiny" id="trailLabel" style="display:none;margin-top:20px">가까운 걷기 좋은 곳</p>
       <div id="trailList"></div>
+      <p class="tiny" style="margin-top:20px">요즘 핫한 러닝 스팟</p>
+      <div id="hotList"></div>
     </div>
     <p class="tiny" id="pickInfo"></p>
   </section>
@@ -678,6 +685,7 @@ function init(){
       $("#qTo").placeholder = "돌고 싶은 동네 · 예: 서신동, 무녀도";
       $("#qTo").value = ""; $("#sTo").innerHTML = "";
       $("#pickInfo").textContent = "지금 있는 곳을 찾는 중…";
+      if (window.renderHotList) window.renderHotList();
       if (window.useHereLoop) window.useHereLoop(true);
       return;
     }
@@ -687,6 +695,7 @@ function init(){
     $("#trailList").style.display = "none";
     $("#trailLabel").style.display = "none";
     $("#justHere").style.display = "none";
+    $("#hotList").innerHTML = "";
     $("#tripList").style.display = "grid";
     $("#qTo").placeholder = "가고 싶은 곳";
     $("#pickWrap").style.display = "block";
@@ -1713,6 +1722,55 @@ const TRIPS = [
   { n:"전주",      s:"한옥마을",           lat:35.8150, lng:127.1530, kr:1 },
 ];
 
+/* 요즘 걷기·러닝으로 붐비는 곳들 — 카카오 지도는 "인기순" 정렬이 없어서
+   (거리순·정확도순만 가능) 직접 골라 둔 목록이다. 눌러서 바로 그곳을 돈다. */
+const HOTSPOTS = [
+  { n:"반포한강공원",   s:"세빛섬과 무지개분수",    lat:37.5106, lng:126.9966 },
+  { n:"여의도한강공원", s:"물빛광장과 벚꽃길",      lat:37.5285, lng:126.9331 },
+  { n:"뚝섬한강공원",   s:"자벌레와 노을",          lat:37.5300, lng:127.0665 },
+  { n:"서울숲",         s:"사슴과 은행나무길",      lat:37.5445, lng:127.0374 },
+  { n:"경의선숲길",     s:"연남동 카페거리",        lat:37.5599, lng:126.9256 },
+  { n:"석촌호수",       s:"벚꽃과 롯데타워 야경",    lat:37.5100, lng:127.1035 },
+  { n:"청계천",         s:"도심 한복판 물길",       lat:37.5696, lng:126.9784 },
+  { n:"인천 센트럴파크", s:"물길과 고층 야경",       lat:37.3931, lng:126.6386 },
+  { n:"세종호수공원",   s:"호수 둘레길",            lat:36.5060, lng:127.2497 },
+  { n:"대전 갑천",       s:"자전거·러닝 코스",       lat:36.3695, lng:127.3660 },
+  { n:"대구 수성못",     s:"둘레길과 오리배",        lat:35.8285, lng:128.6270 },
+  { n:"광주천",         s:"도심 하천길",            lat:35.1420, lng:126.9040 },
+  { n:"전주천",         s:"벚꽃과 산책로",          lat:35.8090, lng:127.1470 },
+  { n:"순천만국가정원", s:"갈대밭과 정원",          lat:34.8853, lng:127.5100 },
+  { n:"부산 해운대",     s:"해변 산책로",            lat:35.1587, lng:129.1604 },
+  { n:"부산 광안리",     s:"광안대교 야경",          lat:35.1533, lng:129.1186 },
+  { n:"경주 보문호",     s:"호수 둘레길",            lat:35.8390, lng:129.2760 },
+  { n:"강릉 경포호",     s:"호수와 바다를 같이",     lat:37.7950, lng:128.8960 },
+  { n:"춘천 의암호",     s:"스카이워크와 호수길",    lat:37.8730, lng:127.7080 },
+];
+function renderHotList(){
+  const box = $("#hotList");
+  if (!box) return;
+  box.innerHTML = "";
+  const near = homeFrom || from;
+  const list = near
+    ? HOTSPOTS.slice().sort((a,b) => metres(near,{lat:a.lat,lng:a.lng}) - metres(near,{lat:b.lat,lng:b.lng}))
+    : HOTSPOTS;
+  list.slice(0, 6).forEach(h => {
+    const b = document.createElement("button");
+    const km = near ? (metres(near, { lat:h.lat, lng:h.lng }) / 1000) : 0;
+    b.innerHTML = `${esc(h.n)}<small>${esc(h.s)}${near ? ` · ${km < 1 ? "바로 근처" : km.toFixed(0) + "km"}` : ""}</small>`;
+    b.onclick = async () => {
+      loopMode = true; touring = false; skipTouched = false; startM = 0;
+      from = { name:h.n, lat:h.lat, lng:h.lng };
+      to   = { ...from };
+      loopVia = null;
+      mode = MODES.find(m => m.id === "walk"); pace = 0; loopKm = 3;
+      await check();
+      if (window.showStep) window.showStep(3);
+    };
+    box.appendChild(b);
+  });
+}
+window.renderHotList = renderHotList;
+
 /* 해외에서 장소 이름으로 찾기 — 위키백과 */
 async function worldPlaceSearch(q, near){
   const langs = ["ko", "en"];
@@ -2279,7 +2337,6 @@ function applyName(n){
   if (window.showStep) window.showStep(1);
   if (window.renderKinds) window.renderKinds();
   const q1 = $("#q1"); if (q1) q1.innerHTML = voc(NAME) + ",<br>오늘 어디 가고 싶어?";
-  document.title = NAME + "의 프로젝트";
   renderStamps();
 }
 
