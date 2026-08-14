@@ -352,7 +352,7 @@
 </div>
 
 <div class="wrap" id="setup" style="display:none">
-  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v62</span></p>
+  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v63</span></p>
   <div id="dots"></div>
 
   <section class="step" data-step="1">
@@ -1193,13 +1193,22 @@ function bindSearch(inputSel, listSel, pick, which){
   const inp = $(inputSel), box = $(listSel);
   let t = null;
 
+  /* 근처 우선으로 찾는다 — 위치 없이 찾으면 "서신천" 같은 동네 이름이
+     전국의 비슷한 글자를 가진 딴 곳들 사이에 묻혀 버린다. */
   const kakaoSearch = (q) => new Promise(res => {
     if (!ps) return res([]);
+    const near = homeFrom || from;
+    const opt = { size: 10 };
+    if (near){
+      opt.location = new kakao.maps.LatLng(near.lat, near.lng);
+      opt.radius = 20000;
+      opt.sort = kakao.maps.services.SortBy.DISTANCE;
+    }
     ps.keywordSearch(q, (d, st) => res(
       st === kakao.maps.services.Status.OK && d.length
         ? d.slice(0,5).map(x => ({ name:x.place_name, lat:+x.y, lng:+x.x,
                                    sub:(x.road_address_name || x.address_name || "") }))
-        : []));
+        : []), opt);
   });
   const paint = (list) => {
     box.innerHTML = "";
