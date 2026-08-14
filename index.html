@@ -164,10 +164,6 @@
        letter-spacing:.05em;text-shadow:0 1px 6px #000}
   #avatar{position:absolute;left:50%;top:50%;transform:translate(-50%,-100%);pointer-events:none;
     z-index:6;display:none;width:74px;text-align:center}
-  /* 같이 걷고 뛰는 사람들 — 혼자보다 러닝 크루처럼 */
-  #crew{position:absolute;inset:0;z-index:5;pointer-events:none;display:none}
-  #crew .mate{position:absolute;transform:translateX(-50%)}
-  #crew .mate svg{display:block;width:100%;height:auto;filter:drop-shadow(0 5px 12px #0008)}
   #avatar svg{width:74px;height:74px;display:block;filter:drop-shadow(0 4px 8px #0007)}
   #avatar b{display:block;margin-top:-4px;font-size:11px;font-weight:600;color:#fff;
     background:#E4572ECC;border-radius:999px;padding:3px 10px;text-shadow:0 1px 3px #0008}
@@ -357,7 +353,7 @@
 </div>
 
 <div class="wrap" id="setup" style="display:none">
-  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v65</span></p>
+  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v66</span></p>
   <div id="dots"></div>
 
   <section class="step" data-step="1">
@@ -370,10 +366,10 @@
       <div class="sug" id="sTo"></div>
       <div id="tripList"></div>
       <button id="justHere" style="display:none">여기서 그냥 돌래</button>
-      <p class="tiny" id="trailLabel" style="display:none;margin-top:20px">가까운 걷기 좋은 곳</p>
-      <div id="trailList"></div>
       <p class="tiny" style="margin-top:20px">요즘 핫한 러닝 스팟</p>
       <div id="hotList"></div>
+      <p class="tiny" id="trailLabel" style="display:none;margin-top:20px">가까운 걷기 좋은 곳</p>
+      <div id="trailList"></div>
     </div>
     <p class="tiny" id="pickInfo"></p>
   </section>
@@ -439,7 +435,6 @@
   <div id="scene"></div>
   <div id="sat"></div>
   <div id="road"></div>
-  <div id="crew"></div>
   <div id="avatar"></div>
   <div id="water"></div>
   <div id="fx"></div>
@@ -3243,58 +3238,6 @@ function carSVG(){
     <circle cx="-4.2" cy="-1.6" r="1.7" fill="#26302F"/><circle cx="4.2" cy="-1.6" r="1.7" fill="#26302F"/></g></svg>`;
 }
 
-/* ── 같이 걷고 뛰는 사람들 ──
-   요즘 러닝 크루처럼, 혼자가 아니라 옆에 두어 명이 함께 간다. */
-const CREW = [
-  { x:63, w:0.76, bottom:9.6,  dur:"0.9s",  hair:"#2E2A28", top:"#2B4C63", pants:"#1E2733", skin:"#F0CDAE" },
-  { x:71, w:0.63, bottom:11.4, dur:"0.76s", hair:"#4A3A2E", top:"#3E6B55", pants:"#2A2F38", skin:"#FFE3C9" },
-];
-
-function mateSVG(fast, c){
-  const dur = fast ? (parseFloat(c.dur) * 0.62).toFixed(2) + "s" : c.dur;
-  const A = fast ? 26 : 17;
-  const sw = (x,y,cx,cy) => `<animateTransform attributeName="transform" type="rotate"
-    values="${x} ${cx} ${cy};${y} ${cx} ${cy};${x} ${cx} ${cy}" dur="${dur}" repeatCount="indefinite"/>`;
-  return `<svg viewBox="-13 -28 26 30" preserveAspectRatio="xMidYMax meet" xmlns="http://www.w3.org/2000/svg">
-    <ellipse cy="0.7" rx="4.3" ry="1.1" fill="#000" opacity=".24"/>
-    <g><animateTransform attributeName="transform" type="translate"
-        values="0 0;0 -0.5;0 0;0 -0.5;0 0" dur="${dur}" repeatCount="indefinite"/>
-      <g>${sw(-A,A,-1.1,-5.9)}
-        <rect x="-2" y="-6" width="1.7" height="5" rx=".8" fill="${c.skin}"/>
-        <rect x="-2.3" y="-1.4" width="2.4" height="1.2" rx=".5" fill="#2A2A2E"/></g>
-      <g>${sw(A,-A,1.1,-5.9)}
-        <rect x="0.3" y="-6" width="1.7" height="5" rx=".8" fill="${c.skin}"/>
-        <rect x="-0.1" y="-1.4" width="2.4" height="1.2" rx=".5" fill="#2A2A2E"/></g>
-      <path d="M-2.7 -10.6 L2.7 -10.6 L3 -5.7 L-3 -5.7 Z" fill="${c.pants}"/>
-      <path d="M-2.9 -14.1 L2.9 -14.1 L3.1 -10.1 L-3.1 -10.1 Z" fill="${c.top}"/>
-      <rect x="-3.1" y="-10.7" width="6.2" height=".4" fill="#FFFFFF" opacity=".5"/>
-      <g>${sw(A,-A,-3,-13.4)}
-        <rect x="-3.6" y="-13.5" width="1.4" height="2.7" rx=".6" fill="${c.top}"/>
-        <rect x="-3.45" y="-11" width="1.1" height="2" rx=".5" fill="${c.skin}"/>
-        <circle cx="-2.9" cy="-8.9" r=".8" fill="${c.skin}"/></g>
-      <g>${sw(-A,A,3,-13.4)}
-        <rect x="2.2" y="-13.5" width="1.4" height="2.7" rx=".6" fill="${c.top}"/>
-        <rect x="2.35" y="-11" width="1.1" height="2" rx=".5" fill="${c.skin}"/>
-        <circle cx="2.9" cy="-8.9" r=".8" fill="${c.skin}"/></g>
-      <rect x="-.6" y="-15.1" width="1.2" height="1.2" fill="${c.skin}"/>
-      <g>${sw(2.6,-2.6,0,-18.6)}
-        <path d="M-2.7 -18.6 Q-3.1 -15 -2.5 -12.2 L2.5 -12.2 Q3.1 -15 2.7 -18.6 Z" fill="${c.hair}"/></g>
-      <ellipse cx="0" cy="-18.4" rx="3.3" ry="3.7" fill="${c.hair}"/>
-    </g></svg>`;
-}
-
-/* 걸을 때·뛸 때만, 거리뷰에서만 함께 간다 */
-function paintCrew(show, fast){
-  const box = $("#crew");
-  if (!box) return;
-  if (!show){ box.style.display = "none"; box.innerHTML = ""; return; }
-  const base = Math.min(window.innerWidth * 0.44, 196);
-  box.style.display = "block";
-  box.innerHTML = CREW.map(c =>
-    `<div class="mate" style="left:${c.x}%;bottom:${c.bottom}%;width:${Math.round(base * c.w)}px">
-       ${mateSVG(fast, c)}</div>`).join("");
-}
-
 /* ── 뒤에서 본 모습 (거리뷰 전용) ──
    앞으로 나아가는 화면이므로 옆모습을 쓰면 게걸음처럼 보인다. */
 function girlBackSVG(fast){
@@ -3452,7 +3395,7 @@ function setAvatar(){
   el.style.top = road ? "92%" : "50%";   // 발이(바퀴가) 노면에 닿게
   /* 거리뷰는 이름표를 머리 위에 두려고 flex 를 쓴다 (인라인 display 가 CSS 를 덮으므로 여기서 정한다) */
   el.style.display = on ? (road ? "flex" : "block") : "none";
-  if (!on){ paintCrew(false); return; }
+  if (!on) return;
   const k = legs.length ? legAt(travelled) : mode.id;
   const onFoot = (k === "walk" || k === "run");
 
@@ -3469,7 +3412,6 @@ function setAvatar(){
        : k === "bike" ? bikeSVG() : carSVG());
 
   /* 걷거나 뛸 때만 인도로, 탈것은 차로 한가운데 */
-  paintCrew(road && onFoot, k === "run");
   el.classList.toggle("foot", road && onFoot);
   if (!(road && onFoot)) el.style.left = "50%";
   else el.style.left = "";              // .foot 규칙이 정한다
