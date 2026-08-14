@@ -352,7 +352,7 @@
 </div>
 
 <div class="wrap" id="setup" style="display:none">
-  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v63</span></p>
+  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v64</span></p>
   <div id="dots"></div>
 
   <section class="step" data-step="1">
@@ -1236,8 +1236,8 @@ function bindSearch(inputSel, listSel, pick, which){
       if (!list.length) list = await second();
       if (!list.length){
         box.innerHTML = '<div><b>찾지 못했습니다</b><small>'
-          + (which === "from" ? '동네 이름으로 넣어 보세요 · 서신동, 정자동'
-                              : '도시 이름으로 넣어 보세요 · 인천, 뉴욕, 파리')
+          + (nearFirst ? '동네나 건물 이름으로 넣어 보세요 · 서신동, 정자동 · 하천·소하천 이름은 지도에 없을 수 있어요'
+                       : '도시 이름으로 넣어 보세요 · 인천, 뉴욕, 파리')
           + '</small></div>';
         return;
       }
@@ -1742,7 +1742,7 @@ async function worldPlaceSearch(q, near){
 /* 근처에 걷기 좋은 곳 — 천변·공원·둘레길 */
 function nearbyTrails(pt){
   if (!ps) return Promise.resolve([]);
-  const words = ["산책로", "천변", "체육공원", "근린공원", "둘레길", "생태공원", "강변"];
+  const words = ["산책로", "천변", "체육공원", "근린공원", "둘레길", "생태공원", "강변", "하천", "수변공원"];
   return Promise.all(words.map(kw => new Promise(res => {
     ps.keywordSearch(kw, (d, st) => {
       res(st === kakao.maps.services.Status.OK ? d : []);
