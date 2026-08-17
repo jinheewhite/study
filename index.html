@@ -350,7 +350,7 @@
 </div>
 
 <div class="wrap" id="setup" style="display:none">
-  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v68</span></p>
+  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v69</span></p>
   <div id="dots"></div>
 
   <section class="step" data-step="1">
@@ -947,12 +947,14 @@ function init(){
     if (n === 1) return !!to;
     return true;
   }
-  /* 해외는 언제나 인천공항부터다 — 물어볼 것이 없으니 그 걸음은 건너뛴다 */
+  /* 해외는 인천공항부터 비행기로 간다 — 둘 다 고를 것이 없으니 두 걸음을 건너뛴다.
+     "뉴욕에 어떻게 갈까?" 하고 비행기 하나만 보여주는 건 물어보나 마나였다. */
   const abroadTrip = () => !!(to && !inKorea(to) && groundM > 1000);
 
   function showStep(n, dir){
     dir = dir || (n >= step ? 1 : -1);
     if (n === 2 && (loopMode || abroadTrip())) return showStep(dir > 0 ? 3 : 1, dir);
+    if (n === 3 && abroadTrip()) return showStep(dir > 0 ? 4 : 1, dir);
     if (n === 4 && loopMode) return showStep(dir > 0 ? 5 : 3, dir);
     step = Math.max(1, Math.min(STEPS, n));
     document.querySelectorAll(".step").forEach(el =>
@@ -965,6 +967,7 @@ function init(){
     $("#setup").classList.toggle("mid", step < STEPS);
     if (step >= 4) refresh();
     if (step === 2 && (loopMode || abroadTrip())){ showStep(3); return; }
+    if (step === 3 && abroadTrip()){ showStep(4); return; }
     if (step === 4 && loopMode){ showStep(5); return; }
     if (step === 2) renderStart();
     if (step === 3) renderModes();
