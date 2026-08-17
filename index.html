@@ -350,7 +350,7 @@
 </div>
 
 <div class="wrap" id="setup" style="display:none">
-  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v69</span></p>
+  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v70</span></p>
   <div id="dots"></div>
 
   <section class="step" data-step="1">
@@ -753,11 +753,12 @@ function init(){
       /* 비행기는 실제로 열 시간이 넘는다 — 배속을 고르는 게 아니라
          "얼마나 앉을지"를 고르면 그 시간에 도착하도록 속도를 맞춘다. */
       const realAll = secsFrom(startM, true);           // 진짜 걸리는 초 (땅길 + 하늘길)
-      [25, 40, 60, 90].forEach(mins => {
+      [5, 25, 40, 60, 90].forEach(mins => {
         const r = Math.max(1, Math.round(realAll / (mins * 60)));
         const b = document.createElement("button");
         b.className = "chip";
-        b.innerHTML = `${fmtMin(mins)}<br><small style="opacity:.65">${dest}까지 · ${r}배속</small>`;
+        b.innerHTML = `${fmtMin(mins)}<br><small style="opacity:.65">` +
+          (mins === 5 ? "잠깐 확인용" : `${dest}까지 · ${r}배속`) + `</small>`;
         b.setAttribute("aria-pressed", minutes === mins);
         b.onclick = () => {
           minutes = mins; rate = r; rateTouched = true;
@@ -1511,7 +1512,7 @@ const freqOf = (m) => 440 * Math.pow(2, (m - 69) / 12);
 const BPM = 108;
 const SPB = 60 / BPM;        // 한 박
 const S16 = SPB / 4;         // 16분음표
-const SWING = 0.11;          // 박마다 뒤쪽 8분음표를 조금 늦춘다
+const SWING = 0.16;          // 박마다 뒤쪽 8분음표를 조금 늦춘다 — 이게 통통 튀는 맛
 
 /* 여러 조성의 진행을 돌아가며 씁니다 — 여덟 마디마다 분위기가 바뀝니다 */
 const PROGS = [
@@ -1600,50 +1601,59 @@ function bass(midi, t, dur, vol){
   o.start(t); o.stop(t + dur + 0.05);
 }
 
-/* ── 로즈 (전자 피아노) ── */
-function rhodes(midi, t, dur, vol){
-  const o1 = AC.createOscillator(), o2 = AC.createOscillator();
-  const g = AC.createGain(), g2 = AC.createGain();
-  o1.type = "sine"; o2.type = "sine";
-  o1.frequency.value = freqOf(midi);
-  o2.frequency.value = freqOf(midi) * 4.02;          // 종 같은 배음
-  g2.gain.setValueAtTime(vol * 0.55, t);
-  g2.gain.exponentialRampToValueAtTime(0.0001, t + Math.min(dur, 0.45));
-  o2.connect(g2); g2.connect(g); o1.connect(g);
+/* ── 피아노 한 대 ──
+   망치가 줄을 때리는 소리라 시작이 또렷하고 뒤로 갈수록 부드럽게 잦아든다.
+   배음을 살짝 어긋나게(2.001·3.002) 얹어야 전자음이 아니라 나무 상자 소리가 난다.
+   높은 음일수록 빨리 사라지는 것도 진짜 피아노와 같다. */
+function piano(midi, t, dur, vol){
+  const f0 = freqOf(midi);
+  const g = AC.createGain();
   g.gain.setValueAtTime(0.0001, t);
-  g.gain.linearRampToValueAtTime(vol, t + 0.012);
+  g.gain.linearRampToValueAtTime(vol, t + 0.006);        // 망치가 때리는 순간
+  g.gain.exponentialRampToValueAtTime(vol * 0.3, t + Math.min(dur, 0.18));
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  g.connect(master); g.connect(verb);
-  o1.start(t); o2.start(t); o1.stop(t + dur + 0.1); o2.stop(t + dur + 0.1);
+  const tone = AC.createBiquadFilter();
+  tone.type = "lowpass";
+  tone.frequency.setValueAtTime(Math.min(9000, f0 * 12), t);
+  tone.frequency.exponentialRampToValueAtTime(Math.max(700, f0 * 3), t + dur);
+  const PART = [[1, 1], [2.001, 0.42], [3.002, 0.17], [4.004, 0.07]];
+  const os = PART.map(([mul, amp]) => {
+    const o = AC.createOscillator(), pg = AC.createGain();
+    o.type = "sine"; o.frequency.value = f0 * mul;
+    pg.gain.value = amp / (1 + f0 * mul / 2200);         // 높은 배음은 얌전하게
+    o.connect(pg); pg.connect(tone);
+    return o;
+  });
+  tone.connect(g); g.connect(master); g.connect(verb);
+  os.forEach(o => { o.start(t); o.stop(t + dur + 0.12); });
 }
+const rhodes = piano;         // 예전 이름으로 부르던 곳도 그대로 동작하도록
 
-/* 한 마디는 16분음표 16칸. 칸마다 무엇을 칠지 정해 둔다. */
+/* 피아노 한 대로만 친다. 드럼도 베이스도 없다 —
+   리듬은 왼손이 만든다. 낮은 음을 밟고, 뒷박에 화음을 툭툭 끊어 치는
+   그 엇박이 신나는 느낌의 전부다 (래그타임·부기우기가 그렇게 논다).
+   한 마디는 16분음표 16칸. */
 function playStep(i, t){
   const P = PROGS[prog], c = P.ch[bar % P.ch.length];
 
-  /* 드럼 — 네 박을 또박또박 밟고 뒷박에 손뼉. 몸이 먼저 반응하는 자리다 */
-  if (i === 0 || i === 8) kick(t, 0.88);
-  if (i === 3 || i === 11) kick(t, 0.42);
-  if (i === 14 && bar % 2 === 1) kick(t, 0.5);
-  if (i === 4 || i === 12){ snare(t, 0.26); clap(t, 0.2); }
-  if (i === 7 || i === 15) snare(t, 0.07);                  // 스치는 고스트
-  if (i % 2 === 0) hat(t, i % 4 === 0 ? 0.15 : 0.09);
-  if (i === 6 || i === 14) hat(t, 0.12, true);              // 오픈 하이햇 — 앞으로 미는 느낌
+  /* 왼손 — 낮은 음(1·3박)과 화음(2·4박)을 번갈아. 이게 걸음이 된다 */
+  if (i === 0)  piano(c.b - 12, t, SPB * 0.5, 0.30);        // 쿵
+  if (i === 8)  piano(c.b - 5,  t, SPB * 0.5, 0.24);        // 쿵 (5도로 옮겨)
+  if (i === 4 || i === 12)                                   // 짝 — 화음을 짧게
+    c.n.slice(0, 3).forEach((m, k) => piano(m - 12, t + k * 0.006, SPB * 0.26, 0.11));
 
-  /* 베이스 — 8분음표로 계속 걸어 다닌다. 이게 흥의 뼈대 */
-  const WALK = [0, -12, 0, 7, 0, -5, 0, 3];                 // 루트 기준 걸음
-  if (i % 2 === 0){
-    const w = WALK[(i / 2) % WALK.length];
-    bass(c.b - 12 + w, t, SPB * 0.44, i === 0 ? 0.5 : 0.34);
-  }
+  /* 왼손 사이사이 — 엇박에 낮은 음 하나. 이게 빠지면 밋밋해진다 */
+  if (i === 6 || i === 14) piano(c.b - 12 + 7, t, SPB * 0.22, 0.12);
 
-  /* 로즈 코드 — 뒷박에 짧게 끊어 친다 (펑키한 커팅) */
-  if (i === 2 || i === 6 || i === 10 || i === 14)
-    c.n.slice(0, 3).forEach((m, k) => rhodes(m, t + k * 0.006, SPB * 0.3, 0.075));
+  /* 오른손 — 화음을 잘게 굴린다. 손가락이 통통 튀는 자리 */
+  if (i === 2 || i === 10)
+    c.n.slice(1, 4).forEach((m, k) => piano(m, t + k * 0.018, SPB * 0.34, 0.085));
 
-  /* 멜로디는 여전히 단순하게 — 공부를 방해하면 안 된다 */
+  /* 멜로디 — 단순하게. 공부를 방해하면 안 된다 */
   if (i === 0 || i === 7 || i === 12)
-    rhodes(c.n[(bar * 3 + i) % c.n.length] + 12, t, SPB * 0.5, 0.055);
+    piano(c.n[(bar * 3 + i) % c.n.length] + 12, t, SPB * 0.62, 0.075);
+  if (i === 15 && bar % 4 === 3)                             // 마디 끝에 한 번 굴려 준다
+    [0, 2, 4].forEach((k, j) => piano(c.n[k % c.n.length] + 12, t + j * 0.03, SPB * 0.3, 0.055));
 }
 
 /* 앞을 내다보며 미리 예약한다 — setInterval 로 마디를 통째로 치면 박자가 밀린다 */
@@ -1679,7 +1689,7 @@ function startMusic(){
     const vg = AC.createGain(); vg.gain.value = 0.32;
     verb.connect(vg); vg.connect(master);
     master.connect(AC.destination);
-    master.gain.linearRampToValueAtTime(0.8, AC.currentTime + 2.5);
+    master.gain.linearRampToValueAtTime(0.95, AC.currentTime + 2.5);   // 피아노 한 대뿐이라 조금 올린다
     NOISE = noiseBuf(0.4);
     bar = 0; step16 = 0; prog = Math.floor(Math.random() * PROGS.length);
     barStart = AC.currentTime + 0.15;
@@ -1714,22 +1724,27 @@ function toggleMusic(){
 async function wikiNear(lat, lng, lang){
   const base = `https://${lang}.wikipedia.org/w/api.php`;
   const geo = `${base}?action=query&list=geosearch&gscoord=${lat}%7C${lng}`
-            + `&gsradius=12000&gslimit=14&format=json&origin=*`;
+            + `&gsradius=10000&gslimit=30&format=json&origin=*`;   // 10km 가 위키백과 최대치
   const g = await (await fetch(geo)).json();
   const near = g.query?.geosearch || [];
   const pos = {};
   near.forEach(x => pos[x.pageid] = { lat:x.lat, lng:x.lon });
   const ids = near.map(x => x.pageid);
   if (!ids.length) return [];
+  /* 가까운 순서로 두면 타임스퀘어 옆 잡다한 건물이 먼저 잡힌다.
+     조회수를 같이 받아서 "사람들이 많이 찾아본 곳" 순서로 세운다 — 그게 유명한 곳이다. */
   const det = `${base}?action=query&pageids=${ids.join("|")}`
-            + `&prop=pageimages|extracts&piprop=thumbnail&pithumbsize=900`
-            + `&exintro=1&explaintext=1&exsentences=2&format=json&origin=*`;
+            + `&prop=pageimages|extracts|pageviews&piprop=thumbnail&pithumbsize=900`
+            + `&pvipdays=30&exintro=1&explaintext=1&exsentences=2&format=json&origin=*`;
   const d = await (await fetch(det)).json();
+  const views = (p) => Object.values(p.pageviews || {})
+    .reduce((a, v) => a + (v || 0), 0);
   return Object.values(d.query?.pages || {})
     .filter(p => p.thumbnail && p.thumbnail.source)
     .map(p => ({ title:p.title, desc:(p.extract || "").trim(), img:p.thumbnail.source,
-                 lat:pos[p.pageid]?.lat, lng:pos[p.pageid]?.lng }))
+                 lat:pos[p.pageid]?.lat, lng:pos[p.pageid]?.lng, fame:views(p) }))
     .filter(p => p.lat && p.lng)
+    .sort((a, b) => b.fame - a.fame)
     .slice(0, 8);
 }
 
@@ -2593,9 +2608,22 @@ async function loadRoute(){
     ]);
   } catch(e){}
 
+  /* 유명한 순서로 다섯 곳을 고른 다음, 걷는 길은 가까운 곳부터 이어 준다.
+     이름값 순서 그대로 걸으면 타임스퀘어에서 자유의 여신상으로 갔다가 다시
+     올라오는 식으로 왔다 갔다 한다. */
+  let pool = list.filter(x => x.lat && x.lng).slice(0, 8);
+  const order = [];
+  let head = { lat:city.lat, lng:city.lng };
+  while (pool.length && order.length < 5){
+    let bi = 0, bd = Infinity;
+    pool.forEach((x, i) => { const d = metres(head, x); if (d < bd){ bd = d; bi = i; } });
+    head = pool[bi];
+    order.push(pool.splice(bi, 1)[0]);
+  }
+
   let cur = { lat:city.lat, lng:city.lng };
   let picked = 0;
-  for (const x of list.filter(x => x.lat && x.lng).slice(0, 10)){
+  for (const x of order){
     if (picked >= 5) break;
     if (metres(cur, x) < 250) continue;
     picked++;
@@ -2830,6 +2858,7 @@ function buildMap(){
     if (buildMiniWorld()){
       $("#mini").style.display = "";
       $("#swap").onclick = () => {
+        if (flying()) return;                      // 하늘에서는 지도뿐이다
         const ring = roadOK() ? ["map","road","draw"] : ["map","draw"];
         viewMode = ring[(ring.indexOf(viewMode) + 1) % ring.length];
         applyView();
@@ -2854,6 +2883,7 @@ function buildMap(){
     buildWorldMap();
     $("#swap").style.display = "";
     $("#swap").onclick = () => {
+        if (flying()) return;                      // 하늘에서는 지도뿐이다
         const ring = roadOK() ? ["map","road","draw"] : ["map","draw"];
     viewMode = ring[(ring.indexOf(viewMode) + 1) % ring.length];
     applyView();
@@ -2887,7 +2917,8 @@ function buildMap(){
     zIndex:3, content:'<div class="pin me"></div>', xAnchor:0.5, yAnchor:0.5 });
   fitMini();
   $("#swap").onclick = () => {
-    const ring = roadOK() ? ["map","road","draw"] : ["map","draw"];
+    if (flying()) return;                      // 하늘에서는 지도뿐이다
+        const ring = roadOK() ? ["map","road","draw"] : ["map","draw"];
     viewMode = ring[(ring.indexOf(viewMode) + 1) % ring.length];
     applyView();
   };
@@ -3846,6 +3877,7 @@ const SW = 400, SH = 200, HZ = 116, GY = 150;
 let sceneOn = false, rafId = null, smoothM = 0, curTheme = "", lastRegion = "", signText = "";
 let tunnelUntil = 0, bridgeUntil = 0, eventName = "";
 let layers = {}, tunShown = "", watShown = "";     // 흐르는 층을 붙잡아 둔다
+let preFlyView = "";                               // 비행기 타기 전에 보던 화면
 
 const rnd = (i,s) => { const x = Math.sin(i*127.1 + s*311.7) * 43758.5453; return x - Math.floor(x); };
 
@@ -4225,7 +4257,8 @@ function applyView(){
   $("#satzoom").style.display = (viewMode === "map") ? "flex" : "none";
   $("#swap").textContent = (viewMode === "map") ? (roadOK() ? "거리뷰" : "그림")
     : (viewMode === "road") ? "그림" : "지도";
-  $("#swap").style.display = "";
+  /* 하늘에서는 바꿀 화면이 없다 — 거리뷰도 그림도 하늘과 맞지 않는다 */
+  $("#swap").style.display = flying() ? "none" : "";
   if (satOn){
     buildSat();
     setTimeout(() => {
@@ -4356,11 +4389,16 @@ function jumpInner(m){
       setAvatar();
       if ((leg === "plane" || leg === "boat") && groundM > 0 && prev)
         banner(depName, leg === "boat" ? "이제 배를 탑니다" : "이제 비행기를 탑니다");
-      /* 이륙하면 창밖(구름) 그림으로, 착륙하면 다시 땅 화면으로.
-         예전에는 거리뷰인 채로 떠서 한국 골목 사진이 태평양 위에 그대로 붙어 있었다. */
-      if (leg === "plane" && viewMode !== "draw"){ viewMode = "draw"; applyView(); }
-      else if (prev === "plane" && leg !== "plane" && viewMode === "draw"){
-        viewMode = roadOK() ? "road" : "map"; applyView();
+      /* 하늘에서는 지도만 본다 — 비행기가 지도 위를 건너가는 게 전부다.
+         거리뷰는 한국 골목 사진이 태평양 위에 붙어 있고, 그림은 창밖 풍경이라
+         기차 타는 화면처럼 보인다. 둘 다 하늘에서는 말이 안 된다.
+         내리면 원래 보던 화면으로 돌려준다. */
+      if (leg === "plane"){
+        if (viewMode !== "map"){ preFlyView = viewMode; viewMode = "map"; applyView(); }
+      } else if (prev === "plane"){
+        viewMode = roadOK() ? (preFlyView || "road") : "map";
+        preFlyView = "";
+        applyView();
       }
       if (leg === "train"){
         if (prev) banner(depName || "기차를 탔어",
