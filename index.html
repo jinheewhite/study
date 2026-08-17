@@ -129,7 +129,7 @@
 
   /* 주행 화면 */
   #ride{display:none;position:fixed;inset:0;background:#000}
-  #scene{position:absolute;inset:0;display:none;opacity:0;transition:opacity .4s ease}
+  #scene{position:absolute;inset:0;display:none;opacity:1}
   #sat{position:absolute;inset:0;display:none;background:#0B0E11;z-index:1}
   #road{position:absolute;inset:0;display:none;background:#0B0E11;z-index:1;
     transform-origin:50% 46%;will-change:transform;overflow:hidden}
@@ -353,7 +353,7 @@
 </div>
 
 <div class="wrap" id="setup" style="display:none">
-  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v71</span></p>
+  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v72</span></p>
   <div id="dots"></div>
 
   <section class="step" data-step="1">
@@ -1632,31 +1632,37 @@ function piano(midi, t, dur, vol){
 }
 const rhodes = piano;         // 예전 이름으로 부르던 곳도 그대로 동작하도록
 
-/* 피아노 한 대로만 친다. 드럼도 베이스도 없다 —
-   리듬은 왼손이 만든다. 낮은 음을 밟고, 뒷박에 화음을 툭툭 끊어 치는
-   그 엇박이 신나는 느낌의 전부다 (래그타임·부기우기가 그렇게 논다).
+/* 피아노 한 대로만 친다. 드럼도 베이스도 없다 — 리듬은 왼손이 만든다.
+   경쾌함은 "쿵-짝 쿵-짝" 이 또박또박 돌아오는 데서 나온다.
+   왼손이 낮은 음을 밟고(쿵), 곧바로 화음을 위에서 툭 치고(짝),
+   그 사이 엇박을 오른손이 채운다. 래그타임이 노는 방식이다.
    한 마디는 16분음표 16칸. */
 function playStep(i, t){
   const P = PROGS[prog], c = P.ch[bar % P.ch.length];
+  const on = (...ks) => ks.indexOf(i) >= 0;
 
-  /* 왼손 — 낮은 음(1·3박)과 화음(2·4박)을 번갈아. 이게 걸음이 된다 */
-  if (i === 0)  piano(c.b - 12, t, SPB * 0.5, 0.30);        // 쿵
-  if (i === 8)  piano(c.b - 5,  t, SPB * 0.5, 0.24);        // 쿵 (5도로 옮겨)
-  if (i === 4 || i === 12)                                   // 짝 — 화음을 짧게
-    c.n.slice(0, 3).forEach((m, k) => piano(m - 12, t + k * 0.006, SPB * 0.26, 0.11));
+  /* ── 왼손: 쿵 - 짝 - 쿵 - 짝 (네 박 내내 쉬지 않는다) ── */
+  if (on(0))  piano(c.b - 12, t, SPB * 0.42, 0.34);         // 쿵 (루트)
+  if (on(8))  piano(c.b - 5,  t, SPB * 0.42, 0.30);         // 쿵 (5도)
+  if (on(4, 12))                                             // 짝 (화음을 짧고 세게)
+    c.n.slice(0, 3).forEach((m, k) => piano(m - 12, t + k * 0.005, SPB * 0.2, 0.15));
 
-  /* 왼손 사이사이 — 엇박에 낮은 음 하나. 이게 빠지면 밋밋해진다 */
-  if (i === 6 || i === 14) piano(c.b - 12 + 7, t, SPB * 0.22, 0.12);
+  /* ── 오른손: 엇박을 채운다. 이게 통통 튀는 맛 ── */
+  if (on(2, 6, 10, 14)){
+    const up = c.n[(i / 2) % c.n.length];
+    piano(up, t, SPB * 0.18, 0.10);
+  }
 
-  /* 오른손 — 화음을 잘게 굴린다. 손가락이 통통 튀는 자리 */
-  if (i === 2 || i === 10)
-    c.n.slice(1, 4).forEach((m, k) => piano(m, t + k * 0.018, SPB * 0.34, 0.085));
+  /* ── 멜로디: 마디마다 조금씩 달라지되 단순하게 ── */
+  const TUNE = [0, 2, 1, 4, 2, 1, 3, 0];                     // 화음 안에서만 고른다
+  if (on(0, 3, 6, 11)){
+    const n = c.n[TUNE[(bar * 4 + i) % TUNE.length] % c.n.length] + 12;
+    piano(n, t, SPB * 0.4, 0.085);
+  }
 
-  /* 멜로디 — 단순하게. 공부를 방해하면 안 된다 */
-  if (i === 0 || i === 7 || i === 12)
-    piano(c.n[(bar * 3 + i) % c.n.length] + 12, t, SPB * 0.62, 0.075);
-  if (i === 15 && bar % 4 === 3)                             // 마디 끝에 한 번 굴려 준다
-    [0, 2, 4].forEach((k, j) => piano(c.n[k % c.n.length] + 12, t + j * 0.03, SPB * 0.3, 0.055));
+  /* ── 마디 끝: 한 번 굴려서 다음 마디로 넘긴다 ── */
+  if (on(14, 15) && bar % 2 === 1)
+    piano(c.n[(bar + i) % c.n.length] + 12, t, SPB * 0.22, 0.07);
 }
 
 /* 앞을 내다보며 미리 예약한다 — setInterval 로 마디를 통째로 치면 박자가 밀린다 */
@@ -4271,14 +4277,15 @@ function applyView(){
   else roadDollyStop();
   setAvatar();
   /* 그림으로 넘어갈 때 — 다 그려서 제 위치에 놓은 다음에 보여준다.
-     빈 화면을 먼저 띄우고 그리면 그 순간 툭 걸리는 것처럼 보인다. */
+     빈 화면을 먼저 띄우고 그리면 그 순간 툭 걸리는 것처럼 보인다.
+     투명하게 만들어 뒀다가 다음 프레임에 켜는 방식은 쓰지 않는다 —
+     그 사이 화면이 또 바뀌면 0 에 멈춰서 까만 화면이 된다. */
   if (sceneOn){
     const sc = $("#scene");
-    sc.style.opacity = 0;
     buildScene(curTheme || "hill");
     try { sceneTick(); } catch(e){}          // 첫 프레임부터 흘러가던 자리에서 시작
     sc.style.display = "block";
-    requestAnimationFrame(() => { sc.style.opacity = 1; });
+    sc.style.opacity = 1;
     if (!rafId) rafId = requestAnimationFrame(sceneFrame);
   } else {
     $("#scene").style.display = "none";
@@ -4353,9 +4360,11 @@ function run(){
   document.addEventListener("visibilitychange", onHide);
 }
 
-function onHide(){
-  if (document.hidden && locked && !finished) end(false);
-}
+/* 화면을 잠깐 벗어났다고 여행을 끝내지 않는다.
+   알림 하나 확인하거나 다른 탭에 갔다 왔다고 전주에서 뉴욕 가던 게
+   통째로 없어지면, 다시 처음부터 "어디 가고 싶어?" 를 고르게 된다.
+   돌아오면 그 자리에서 이어서 간다. */
+function onHide(){}
 
 function tick(){
   /* 앉아 있은 진짜 시간과, 여행 속에서 흐른 시간은 다르다.
