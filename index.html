@@ -133,6 +133,11 @@
   #sat{position:absolute;inset:0;display:none;background:#0B0E11;z-index:1}
   #road{position:absolute;inset:0;display:none;background:#0B0E11;z-index:1;
     transform-origin:50% 46%;will-change:transform;overflow:hidden}
+  /* 해외에는 로드뷰가 없어서 그 자리에서 찍힌 사진을 대신 띄운다 */
+  #road .photo{position:absolute;inset:0;background:#0B0E11 center/cover no-repeat;
+    transition:opacity .5s ease}
+  #road .pcap{position:absolute;left:0;right:0;bottom:8%;text-align:center;font-size:12px;
+    font-weight:400;color:#F2EFE6;text-shadow:0 1px 6px #000,0 0 14px #000;padding:0 12%}
   #jump{position:absolute;right:14px;bottom:112px;z-index:8;display:none;align-items:center;gap:8px;
     height:52px;padding:0 18px 0 15px;border-radius:26px;border:1px solid #ffffff44;
     background:#0C1719D9;color:#F2EFE6;font-size:15px;font-family:inherit;backdrop-filter:blur(8px);
@@ -353,7 +358,7 @@
 </div>
 
 <div class="wrap" id="setup" style="display:none">
-  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v73</span></p>
+  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v74</span></p>
   <div id="dots"></div>
 
   <section class="step" data-step="1">
@@ -3805,12 +3810,61 @@ function peekTurn(deg){
 
 /* ── 로드뷰 (국내만) ── */
 let rv = null, rvc = null, panoAt = -1e9, lastPano = null, panoTime = 0;
-const roadOK = () => { const q = at(want); return inKorea(q); };
+/* 로드뷰는 카카오 것이라 한국 밖에는 아예 없다.
+   해외에서는 대신 그 자리에서 찍힌 진짜 사진을 보여준다 —
+   위키미디어 공용에 좌표가 달린 사진이 올라와 있고 키도 필요 없다.
+   브로드웨이에 서면 브로드웨이 사진이 뜬다. */
+/* 하늘에서만 안 된다 — 땅에서는 국내면 로드뷰, 해외면 그 자리 사진 */
+const roadOK = () => !flying();
+const usePhoto = () => { const q = at(want); return !inKorea(q); };
+
+let photoAt = -1e9, photoBusy = false, photoSeen = {}, photoShown = "";
 
 function buildRoad(){
+  const el = $("#road");
+  if (usePhoto()){
+    if (!el.querySelector(".photo")){
+      el.innerHTML = `<div class="photo"></div><b class="pcap">여기 사진을 찾는 중…</b>`;
+      rv = null; rvc = null;                 // 로드뷰 화면을 지웠으니 다시 만들게 한다
+      photoAt = -1e9; photoSeen = {}; photoShown = "";
+    }
+    return;
+  }
+  if (el.querySelector(".photo")){ el.innerHTML = ""; rv = null; rvc = null; }
   if (rv) return;
-  rv  = new kakao.maps.Roadview($("#road"));
+  rv  = new kakao.maps.Roadview(el);
   rvc = new kakao.maps.RoadviewClient();
+}
+
+/* 걸어가는 자리 둘레의 사진을 한 장 가져온다 */
+async function photoStep(p){
+  const box = $("#road").querySelector(".photo");
+  if (!box) return;
+  const k = legs.length ? legAt(travelled) : mode.id;
+  const step = (k === "walk") ? 60 : (k === "run") ? 110 : 260;
+  if (photoBusy || Math.abs(travelled - photoAt) < step) return;
+  photoBusy = true;
+  photoAt = travelled;
+  try {
+    const u = "https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*"
+            + "&generator=geosearch&ggsnamespace=6"
+            + `&ggscoord=${p.lat}%7C${p.lng}&ggsradius=${inKorea(p) ? 300 : 400}&ggslimit=12`
+            + "&prop=imageinfo&iiprop=url&iiurlwidth=1200";
+    const d = await (await fetch(u)).json();
+    const list = Object.values(d.query?.pages || {})
+      .filter(x => x.imageinfo && x.imageinfo[0] && x.imageinfo[0].thumburl)
+      .filter(x => !photoSeen[x.title]);
+    if (list.length){
+      const pick = list[Math.floor(Math.random() * list.length)];
+      photoSeen[pick.title] = 1;
+      photoShown = pick.title.replace(/^File:/, "").replace(/\.(jpg|jpeg|png|webp)$/i, "");
+      box.style.backgroundImage = `url("${pick.imageinfo[0].thumburl}")`;
+      const cap = $("#road").querySelector(".pcap");
+      if (cap) cap.textContent = photoShown.slice(0, 40);
+      roadDolly();                      // 사진이 바뀌었으니 다시 다가가기 시작
+    }
+  } catch(e){ /* 사진이 없으면 그냥 지도로 본다 */ }
+  photoBusy = false;
 }
 
 /* 로드뷰 사진은 10~20m 간격이라 그대로 두면 뚝뚝 끊겨 제자리걸음처럼 보인다.
@@ -3834,6 +3888,7 @@ function roadDollyStop(){
 }
 
 function roadStep(p){
+  if (usePhoto()){ photoStep(p); return; }     // 해외는 그 자리 사진으로
   if (!rv || !rvc) return;
   const k = legs.length ? legAt(travelled) : mode.id;
   const step = (k === "walk") ? 7 : (k === "run") ? 12 : (k === "bike") ? 20 : 28;
@@ -4302,7 +4357,9 @@ function applyView(){
   }
   $("#sat").style.display   = satOn ? "block" : "none";
   $("#satzoom").style.display = (viewMode === "map") ? "flex" : "none";
-  $("#swap").textContent = (viewMode === "map") ? (roadOK() ? "거리뷰" : "그림")
+  /* 해외에는 로드뷰가 없으니 이름도 "사진" 으로 — 누르면 무엇이 나올지 맞게 */
+  const roadName = usePhoto() ? "사진" : "거리뷰";
+  $("#swap").textContent = (viewMode === "map") ? (roadOK() ? roadName : "그림")
     : (viewMode === "road") ? "그림" : "지도";
   /* 하늘에서는 바꿀 화면이 없다 — 거리뷰도 그림도 하늘과 맞지 않는다 */
   $("#swap").style.display = flying() ? "none" : "";
