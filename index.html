@@ -129,7 +129,7 @@
 
   /* 주행 화면 */
   #ride{display:none;position:fixed;inset:0;background:#000}
-  #scene{position:absolute;inset:0;display:none}
+  #scene{position:absolute;inset:0;display:none;opacity:0;transition:opacity .4s ease}
   #sat{position:absolute;inset:0;display:none;background:#0B0E11;z-index:1}
   #road{position:absolute;inset:0;display:none;background:#0B0E11;z-index:1;
     transform-origin:50% 46%;will-change:transform;overflow:hidden}
@@ -223,12 +223,9 @@
        text-shadow:0 1px 4px #000}
   #ctrl{display:flex;gap:8px}
   #ctrl #msgbtn,#ctrl #tune{width:52px;padding:0;font-size:17px}
-  #ctrl #swap{padding:0 16px;font-size:14px}
+  #ctrl #swap{flex:1;padding:0 16px;font-size:14px}
   #ctrl button{height:44px;padding:0 12px;border-radius:10px;border:1px solid #ffffff33;background:#00000055;color:#DCE8E5;
        font-size:13px;font-family:inherit;backdrop-filter:blur(6px)}
-  #stop{flex:1;position:relative;overflow:hidden}
-  #stop i{position:absolute;left:0;top:0;bottom:0;width:0;background:#ffffff2e;font-style:normal}
-  #stop span{position:relative}
   #mini{position:absolute;right:10px;top:54px;width:24vw;max-width:124px;height:30vw;max-height:155px;z-index:4;
        border-radius:14px;overflow:hidden;border:1px solid #ffffff55;box-shadow:0 8px 26px #000a;
        transition:width .28s ease,height .28s ease,right .28s ease,top .28s ease}
@@ -353,7 +350,7 @@
 </div>
 
 <div class="wrap" id="setup" style="display:none">
-  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v66</span></p>
+  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v67</span></p>
   <div id="dots"></div>
 
   <section class="step" data-step="1">
@@ -479,7 +476,6 @@
       <button id="msgbtn" title="응원 문구">💬</button>
       <button id="tune" title="음악">♪</button>
       <button id="swap" title="화면 바꾸기">🗺</button>
-      <button id="stop"><i></i><span>길게 눌러 중단</span></button>
     </div>
   </div>
   <div id="countdown"><b class="mono">3</b><p id="ready1">폰을 엎어두고<br>책을 펴세요</p><p id="ready2"></p></div>
@@ -752,6 +748,31 @@ function init(){
       box.appendChild(b);
     };
 
+    const FF = flightFacts();
+    if (FF){
+      /* 비행기는 실제로 열 시간이 넘는다 — 배속을 고르는 게 아니라
+         "얼마나 앉을지"를 고르면 그 시간에 도착하도록 속도를 맞춘다. */
+      const realAll = secsFrom(startM, true);           // 진짜 걸리는 초 (땅길 + 하늘길)
+      [25, 40, 60, 90].forEach(mins => {
+        const r = Math.max(1, Math.round(realAll / (mins * 60)));
+        const b = document.createElement("button");
+        b.className = "chip";
+        b.innerHTML = `${fmtMin(mins)}<br><small style="opacity:.65">${dest}까지 · ${r}배속</small>`;
+        b.setAttribute("aria-pressed", minutes === mins);
+        b.onclick = () => {
+          minutes = mins; rate = r; rateTouched = true;
+          renderTimes(); refresh();
+          setTimeout(() => showStep(5), 240);
+        };
+        box.appendChild(b);
+      });
+      if (info) info.innerHTML =
+        `${esc(FF.dep)} → ${esc(FF.arr)} <u>${FF.km.toFixed(0)}km</u><br>` +
+        `${FF.name}로 실제 <u>${hhmm(FF.real)}</u> 걸리는 길이야<br>` +
+        `얼마나 앉을지 고르면 그 안에 도착해`;
+      return;
+    }
+
     if (totalM){
       const base = tripSeconds(1);                    // 실시간으로 걸리는 초
       let any = false;
@@ -821,6 +842,13 @@ function init(){
       });
     }
 
+    /* 비행기·배는 속도를 고를 것이 없다 — 정해진 것을 타고 간다.
+       "얼마나 빠르게? 보통 850km/h" 는 고를 게 하나뿐이라 물어보나 마나였다. */
+    const fixed = (mode.id === "plane" || mode.id === "boat");
+    $("#paceLabel").style.display = fixed ? "none" : "";
+    $("#loopPace").style.display  = fixed ? "none" : "";
+    if (fixed){ $("#loopPace").innerHTML = ""; return; }
+
     /* 속도 고르기 — 한 바퀴든 여정이든 */
     const list = PACES[mode.id] || [["보통", mode.kmh]];
     if (!pace || !list.some(x => x[1] === pace)) pace = list[Math.min(1, list.length-1)][1];
@@ -861,7 +889,7 @@ function init(){
     if (q3) q3.textContent = loopMode
       ? ((loopVia ? shortName(loopVia.name) : shortName(from && from.name)) + " 한 바퀴 — 어떻게 돌까?")
       : (leftKm
-          ? `${shortName(from && from.name)} → ${to ? to.name : ""} ${leftKm.toFixed(0)}km — 어떻게 갈까?`
+          ? `${startName()} → ${to ? to.name : ""} ${leftKm.toFixed(0)}km — 어떻게 갈까?`
           : "어떻게 갈까?");
     const box = $("#modes"); box.innerHTML = "";
     const info = $("#modeInfo");
@@ -943,7 +971,7 @@ function init(){
       const q6 = $("#q6");
       if (q6) q6.textContent = loopMode
         ? ((loopVia ? shortName(loopVia.name) : shortName(from && from.name)) + " 한 바퀴 걷자!")
-        : (to ? `${shortName(from && from.name)} → ${to.name}` : "우리 출발할까?");
+        : (to ? `${startName()} → ${to.name}` : "우리 출발할까?");
     }
     window.scrollTo(0, 0);
   }
@@ -1259,9 +1287,6 @@ async function check(){
     return;
   }
 
-  /* 해외나 아주 먼 곳은 "그곳 도착부터" 를 기본으로 권한다 */
-  const farAway = !from || !inKorea(to) || metres(from, to) / 1000 > 900;
-
   if (!from){ from = { name: to.name, lat: to.lat, lng: to.lng }; touring = true; }
   else if (!loopMode) touring = false;   // 집이 있으면 언제나 집에서 출발
 
@@ -1287,7 +1312,10 @@ async function check(){
     try { finishRoute(); } catch(e2){}
   }
   if (!totalM){ path = greatCircle(from, to, 120); try { finishRoute(); } catch(e2){} }
-  if (!skipTouched) startM = (farAway && travelEndM > 20000) ? travelEndM : 0;
+  /* 해외는 공항부터가 기본. 25분 앉는데 전주에서 인천공항까지 달리는 데 다 써 버리면
+     정작 비행기를 못 탄다. 집에서부터 가고 싶으면 "어디서 출발할까"에서 고르면 된다.
+     (예전에는 "도착지 도착부터"가 기본이라 가는 길이 통째로 없었다) */
+  if (!skipTouched) startM = (!inKorea(to) && groundM > 1000) ? groundM : 0;
   refresh();
 }
 
@@ -1333,13 +1361,15 @@ const curKmh = () => pace || mode.kmh;
 
 /* m 지점에서 끝까지 남은 여행 시간(초).
    구간마다 속도가 다르므로(걷기·자동차·비행기) 구간을 하나씩 밟아 더한다. */
-function secsFrom(m){
+/* real=true 면 앱에서 줄이기 전의 "진짜" 속도로 잰다 (비행기 10시간 같은 것) */
+function secsFrom(m, real){
   if (!legs.length) return Math.max(0, totalM - m) / (curKmh() * 1000 / 3600);
   let acc = 0, sec = 0;
   for (const L of legs){
     const s = acc; acc += L.len;
     if (acc <= m) continue;
-    sec += (acc - Math.max(s, m)) / ((L.kmh || curKmh()) * 1000 / 3600);
+    const v = (real && L.kmh0) ? L.kmh0 : L.kmh;
+    sec += (acc - Math.max(s, m)) / ((v || curKmh()) * 1000 / 3600);
   }
   return sec;
 }
@@ -1352,6 +1382,25 @@ const hhmm = (sec) => {
   const h = Math.floor(m / 60), r = m % 60;
   return r ? `${h}시간 ${r}분` : `${h}시간`;
 };
+
+/* 지금 고른 출발점의 이름. "인천공항부터" 를 골랐으면 집 이름이 아니라 공항 이름이어야 한다. */
+function startName(){
+  if (travelEndM > 1000 && startM >= travelEndM - 100) return to ? to.name : "도착지";
+  if (groundM > 1000 && startM >= groundM - 100 && depName) return depName;
+  return shortName(from && from.name);
+}
+
+/* 진짜 비행기로는 몇 시간 걸리는 길인지 — 앱에서는 줄여서 가더라도 사실은 알려준다 */
+function flightFacts(){
+  const air = (legs || []).filter(l => l.kind === "plane" || l.kind === "boat");
+  if (!air.length) return null;
+  const km   = air.reduce((a,l) => a + l.len, 0) / 1000;
+  const real = air.reduce((a,l) => a + l.len / ((l.kmh0 || l.kmh) * 1000 / 3600), 0);
+  const here = air.reduce((a,l) => a + l.len / ((l.kmh    || 1) * 1000 / 3600), 0);
+  return { km, real, here, name: air[0].kind === "boat" ? "배" : "비행기",
+           dep: depName || (from && from.name) || "출발",
+           arr: arrName || (to && to.name) || "도착지" };
+}
 
 let rateTouched = false;
 function suggestRate(){
@@ -1386,6 +1435,8 @@ function renderRates(){
 /* 이동 수단·시간·배속이 바뀔 때마다 예상치를 다시 계산한다 */
 function refresh(){
   if (!totalM) return;
+  try { fitFlightToSession(); } catch(e){}     // 앉는 시간이 바뀌면 비행 속도도 다시 맞춘다
+  const FF   = flightFacts();
   const km   = Math.max(0, totalM - startM) / 1000;
   const need = secsFrom(startM);                                  // 다 가는 데 걸리는 여행 시간(초)
   const runs = Math.max(1, Math.ceil(need / rate / (minutes * 60)));
@@ -1393,17 +1444,22 @@ function refresh(){
   const wayTxt = loopMode
     ? (loopVia ? (shortName(loopVia.name) + " 한 바퀴") : (shortName(from && from.name) + " 한 바퀴"))
     : touring ? `${from.name} 둘러보기`
-    : `${from ? from.name : "여기"} → ${to ? to.name : "도착지"}`;
+    : `${startName()} → ${to ? to.name : "도착지"}`;
   $("#plan").innerHTML =
     `<b>${esc(wayTxt)}</b><br>` +
     (loopMode
       ? `${mode.name}로 <u>${km.toFixed(1)}km</u>` +
         (STRIDE[mode.id] ? ` · 약 <u>${Math.round(km*1000/STRIDE[mode.id]/100)*100}보</u>` : "") +
         `<br><u>${minutes}분</u>이면 제자리로 돌아와`
-      : `${mode.name} <u>${curKmh()}km/h</u> 로 <u>${km.toFixed(0)}km</u>` +
-        `<br>가는 데 <u>${hhmm(need)}</u> 걸려` +
-        `<br>오늘은 <u>${minutes}분</u> 앉아 있자` +
-        (runs > 1 ? ` · 집중 <u>${runs}번</u>이면 도착` : "")) +
+      : (FF
+          ? `${esc(FF.dep)}까지 달려가서 ${FF.name}를 타<br>` +
+            `${esc(FF.dep)} → ${esc(FF.arr)} <u>${FF.km.toFixed(0)}km</u> · ` +
+            `진짜로는 <u>${hhmm(FF.real)}</u> 걸리는 길<br>` +
+            `오늘은 <u>${minutes}분</u> 앉아서 <u>${rate}배속</u>으로 가자`
+          : `${mode.name} <u>${curKmh()}km/h</u> 로 <u>${km.toFixed(0)}km</u>` +
+            `<br>가는 데 <u>${hhmm(need)}</u> 걸려` +
+            `<br>오늘은 <u>${minutes}분</u> 앉아 있자` +
+            (runs > 1 ? ` · 집중 <u>${runs}번</u>이면 도착` : ""))) +
     (loopMode ? "" :
      spots.length > 1 ? `<br>도착하면 명소 <u>${spots.length}곳</u>을 걸어서 둘러봐` : "");
 }
@@ -1444,11 +1500,11 @@ const PLAYLIST = [];
 let AC = null, master = null, verb = null, schedTimer = null, audioEl = null, musicPlaying = false;
 const freqOf = (m) => 440 * Math.pow(2, (m - 69) / 12);
 
-/* 박자 — 로파이 힙합 정도의 속도에 스윙을 살짝 */
-const BPM = 88;
+/* 박자 — 어깨가 들썩이는 속도. 스윙은 살짝 남겨 딱딱하지 않게 */
+const BPM = 108;
 const SPB = 60 / BPM;        // 한 박
 const S16 = SPB / 4;         // 16분음표
-const SWING = 0.17;          // 박마다 뒤쪽 8분음표를 조금 늦춘다
+const SWING = 0.11;          // 박마다 뒤쪽 8분음표를 조금 늦춘다
 
 /* 여러 조성의 진행을 돌아가며 씁니다 — 여덟 마디마다 분위기가 바뀝니다 */
 const PROGS = [
@@ -1498,21 +1554,38 @@ function snare(t, vol){
   s.connect(f); f.connect(g); g.connect(master); g.connect(verb);
   s.start(t); s.stop(t + 0.22);
 }
-function hat(t, vol){
+function hat(t, vol, open){
   const s = AC.createBufferSource(); s.buffer = NOISE;
   const f = AC.createBiquadFilter(); f.type = "highpass"; f.frequency.value = 7400;
   const g = AC.createGain();
+  const d = open ? 0.16 : 0.045;
   g.gain.setValueAtTime(vol, t);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.045);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + d);
   s.connect(f); f.connect(g); g.connect(master);
-  s.start(t); s.stop(t + 0.07);
+  s.start(t); s.stop(t + d + 0.03);
+}
+/* 손뼉 — 뒷박에 스네어와 겹쳐 치면 확 신이 난다 */
+function clap(t, vol){
+  for (let k = 0; k < 3; k++){
+    const s = AC.createBufferSource(); s.buffer = NOISE;
+    const f = AC.createBiquadFilter(); f.type = "bandpass"; f.frequency.value = 1250; f.Q.value = 1.4;
+    const g = AC.createGain();
+    const tt = t + k * 0.011;
+    g.gain.setValueAtTime(vol * (k === 2 ? 1 : 0.6), tt);
+    g.gain.exponentialRampToValueAtTime(0.0001, tt + (k === 2 ? 0.15 : 0.04));
+    s.connect(f); f.connect(g); g.connect(master); g.connect(verb);
+    s.start(tt); s.stop(tt + 0.2);
+  }
 }
 
 /* ── 베이스 ── */
 function bass(midi, t, dur, vol){
   const o = AC.createOscillator(), f = AC.createBiquadFilter(), g = AC.createGain();
-  o.type = "triangle"; o.frequency.value = freqOf(midi);
-  f.type = "lowpass"; f.frequency.value = 430;
+  /* 톱니에 필터를 열어 두면 통통 튀는 소리가 난다 — 이게 흥의 절반 */
+  o.type = "sawtooth"; o.frequency.value = freqOf(midi);
+  f.type = "lowpass"; f.frequency.value = 900; f.Q.value = 6;
+  f.frequency.setValueAtTime(1500, t);
+  f.frequency.exponentialRampToValueAtTime(520, t + Math.min(dur, 0.22));
   g.gain.setValueAtTime(0.0001, t);
   g.gain.linearRampToValueAtTime(vol, t + 0.02);
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
@@ -1541,24 +1614,29 @@ function rhodes(midi, t, dur, vol){
 function playStep(i, t){
   const P = PROGS[prog], c = P.ch[bar % P.ch.length];
 
-  /* 드럼 — 이게 있어야 걸음이 붙는다 */
-  if (i === 0 || i === 10) kick(t, 0.85);
-  if (i === 6 && bar % 2 === 1) kick(t, 0.5);
-  if (i === 4 || i === 12) snare(t, 0.3);
-  if (i % 2 === 0) hat(t, i % 4 === 0 ? 0.15 : 0.085);
+  /* 드럼 — 네 박을 또박또박 밟고 뒷박에 손뼉. 몸이 먼저 반응하는 자리다 */
+  if (i === 0 || i === 8) kick(t, 0.88);
+  if (i === 3 || i === 11) kick(t, 0.42);
+  if (i === 14 && bar % 2 === 1) kick(t, 0.5);
+  if (i === 4 || i === 12){ snare(t, 0.26); clap(t, 0.2); }
+  if (i === 7 || i === 15) snare(t, 0.07);                  // 스치는 고스트
+  if (i % 2 === 0) hat(t, i % 4 === 0 ? 0.15 : 0.09);
+  if (i === 6 || i === 14) hat(t, 0.12, true);              // 오픈 하이햇 — 앞으로 미는 느낌
 
-  /* 베이스 — 루트를 밟고 마디 끝에 5도로 넘어간다 */
-  if (i === 0)  bass(c.b - 12, t, SPB * 1.3, 0.46);
-  if (i === 8)  bass(c.b - 12, t, SPB * 0.5, 0.3);
-  if (i === 14) bass(c.b - 5,  t, SPB * 0.4, 0.24);
+  /* 베이스 — 8분음표로 계속 걸어 다닌다. 이게 흥의 뼈대 */
+  const WALK = [0, -12, 0, 7, 0, -5, 0, 3];                 // 루트 기준 걸음
+  if (i % 2 === 0){
+    const w = WALK[(i / 2) % WALK.length];
+    bass(c.b - 12 + w, t, SPB * 0.44, i === 0 ? 0.5 : 0.34);
+  }
 
-  /* 로즈 코드 — 박 사이에 짧게 끊어 친다 */
-  if (i === 2 || i === 10)
-    c.n.slice(0, 3).forEach((m, k) => rhodes(m, t + k * 0.007, SPB * 0.62, 0.07));
+  /* 로즈 코드 — 뒷박에 짧게 끊어 친다 (펑키한 커팅) */
+  if (i === 2 || i === 6 || i === 10 || i === 14)
+    c.n.slice(0, 3).forEach((m, k) => rhodes(m, t + k * 0.006, SPB * 0.3, 0.075));
 
-  /* 가벼운 아르페지오 — 멜로디는 단순하게 (공부에 방해되지 않게) */
-  if (i === 6 || i === 12 || i === 15)
-    rhodes(c.n[(bar * 3 + i) % c.n.length] + 12, t, SPB * 0.75, 0.05);
+  /* 멜로디는 여전히 단순하게 — 공부를 방해하면 안 된다 */
+  if (i === 0 || i === 7 || i === 12)
+    rhodes(c.n[(bar * 3 + i) % c.n.length] + 12, t, SPB * 0.5, 0.055);
 }
 
 /* 앞을 내다보며 미리 예약한다 — setInterval 로 마디를 통째로 치면 박자가 밀린다 */
@@ -2141,7 +2219,6 @@ function resetRide(){
   $("#quote").classList.remove("on","out");
   $("#place").style.opacity = 0;
   $("#countdown").style.display = "";
-  $("#stop").querySelector("i").style.width = 0;
   $("#ride").className = "";
 }
 
@@ -2735,9 +2812,9 @@ function pickFirstView(){
 
 /* 기차 창밖 — 도심 테마는 어울리지 않으니 들판으로 바꿔 준다 */
 function trainView(){
-  if (!curTheme || curTheme === "metro" || curTheme === "sky") curTheme = "plain";
-  if (viewMode !== "draw"){ viewMode = "draw"; applyView(); }
-  else if (sceneOn) buildScene(curTheme);
+  const want2 = (!curTheme || curTheme === "metro" || curTheme === "sky") ? "plain" : curTheme;
+  if (viewMode !== "draw"){ curTheme = want2; viewMode = "draw"; applyView(); }
+  else if (sceneOn && want2 !== curTheme){ buildScene(want2); try { sceneTick(); } catch(e){} }
 }
 
 function buildMap(){
@@ -3761,8 +3838,20 @@ const PPM = 2.2;
 const SW = 400, SH = 200, HZ = 116, GY = 150;
 let sceneOn = false, rafId = null, smoothM = 0, curTheme = "", lastRegion = "", signText = "";
 let tunnelUntil = 0, bridgeUntil = 0, eventName = "";
+let layers = {}, tunShown = "", watShown = "";     // 흐르는 층을 붙잡아 둔다
 
 const rnd = (i,s) => { const x = Math.sin(i*127.1 + s*311.7) * 43758.5453; return x - Math.floor(x); };
+
+/* 흐르는 띠는 한 칸(w)만 그려 두면 안 된다.
+   화면을 옆으로 밀 때 오른쪽이 텅 빈 채로 지나가서 나무·가드레일이 통째로 사라진다.
+   화면 너비(SW)를 덮고도 남게 여러 칸을 이어 붙인다. */
+function tile(arr, w){
+  const body = (typeof arr === "string") ? arr : arr.join("");
+  const n = Math.ceil(SW / w) + 2;      // +2 — 한 칸이 딱 맞지 않아도 오른쪽이 비지 않게
+  let s = "";
+  for (let i = 0; i < n; i++) s += `<g transform="translate(${i*w} 0)">${body}</g>`;
+  return s;
+}
 
 /* ── 지역 테마 ── */
 const THEMES = {
@@ -3888,6 +3977,7 @@ function prop(k, x, P, N){
 /* ── 비행기 창밖 ── */
 function buildSkyScene(){
   curTheme = "sky";
+  layers = {}; tunShown = watShown = "";
   const P = palette(), N = P.night;
   const hi   = N ? "#0A1226" : "#2E6FA8";     // 성층권
   const lo   = N ? "#1B2C44" : "#A8D2EA";
@@ -3914,8 +4004,6 @@ function buildSkyScene(){
     if (N) for (let k = 0; k < 9; k++)
       ground.push(`<circle cx="${(x+8+rnd(i*9+k,86)*(w-10)).toFixed(1)}" cy="${(176+rnd(i*9+k,87)*20).toFixed(1)}" r=".9" fill="#FFD9A0" opacity="${(.4+rnd(i*9+k,88)*.6).toFixed(2)}"/>`);
   }
-  const dup = (a) => a.join("") + a.join("");
-
   $("#scene").innerHTML = `
   <svg viewBox="0 0 ${SW} ${SH}" preserveAspectRatio="none">
     <defs><linearGradient id="sky2" x1="0" y1="0" x2="0" y2="1">
@@ -3925,10 +4013,10 @@ function buildSkyScene(){
     ${N ? Array.from({length:46},(_,k)=>`<circle cx="${(rnd(k,91)*SW).toFixed(1)}" cy="${(rnd(k,92)*90).toFixed(1)}" r="${(rnd(k,93)*.9+.3).toFixed(2)}" fill="#fff" opacity="${(.35+rnd(k,94)*.6).toFixed(2)}"/>`).join("")
        : `<circle cx="${SW*.8}" cy="26" r="15" fill="#FFF8E0" opacity=".7"/>`}
     <rect y="168" width="${SW}" height="${SH-168}" fill="${sea}"/>
-    <g id="lGround">${dup(ground)}</g>
-    <g id="lFar">${dup(far)}</g>
-    <g id="lMid">${dup(mid)}</g>
-    <g id="lNear">${dup(near)}</g>
+    <g id="lGround">${tile(ground, 504)}</g>
+    <g id="lFar">${tile(far, 416)}</g>
+    <g id="lMid">${tile(mid, 434)}</g>
+    <g id="lNear">${tile(near, 470)}</g>
   </svg>`;
 }
 
@@ -3936,6 +4024,7 @@ function buildSkyScene(){
 function buildScene(key){
   if (flying()) return buildSkyScene();
   curTheme = key;
+  layers = {}; tunShown = watShown = "";
   const T = THEMES[key] || THEMES.hill, P = palette();
   const far = [], mid = [], near = [], deco = [];
 
@@ -3955,11 +4044,12 @@ function buildScene(key){
     if (T.stone && rnd(i,16) > .5)
       near.push(`<path d="M${x+11} ${GY-1} h18 v-5 h-18 Z" fill="${P.night?"#2E3634":"#8A8578"}" opacity=".9"/>`);
   }
+  // 논두렁 — 한 마디(140)만 그려 두고 옆으로 이어 붙인다. 그래야 같이 흘러간다
   if (T.paddy) for (let k = 0; k < 6; k++)
-    deco.push(`<path d="M0 ${HZ+14+k*5.5} q70 ${-2+k} 140 0 t140 0 t140 0" stroke="${P.grass2}" stroke-width="1.6" fill="none" opacity=".6"/>`);
+    deco.push(`<path d="M0 ${HZ+14+k*5.5} q70 ${-2+k} 140 0" stroke="${P.grass2}" stroke-width="1.6" fill="none" opacity=".6"/>`);
 
-  // 풀 질감
-  const blades = Array.from({length:120}, (_,k) => {
+  // 풀 질감 (한 마디 = 화면 너비)
+  const blades = Array.from({length:70}, (_,k) => {
     const x = rnd(k,21)*SW, y = GY - 2 - rnd(k,22)*11;
     return `<path d="M${x.toFixed(1)} ${y.toFixed(1)} l${(rnd(k,23)*2-1).toFixed(1)} -3" stroke="${P.grass2}" stroke-width=".7" opacity=".5"/>`;
   }).join("");
@@ -3988,7 +4078,6 @@ function buildScene(key){
     ${[0,1,2,3,4].map(i=>`<path d="M${i*11} ${(i%3)*6} q3 -2.6 6 0 q3 -2.6 6 0" stroke="#3E4A44"
         stroke-width="1.1" fill="none"/>`).join("")}</g>`;
 
-  const dup = (a) => a.join("") + a.join("");
   const sea = T.sea ? `<rect y="${HZ-30}" width="${SW}" height="38" fill="${P.sea}"/>
      ${[0,1,2,3,4,5,6].map(k=>`<path d="M${k*60} ${HZ-20+(k%3)*5} q12 -2.5 24 0" stroke="#FFFFFF" stroke-width=".8" fill="none" opacity=".28"/>`).join("")}` : "";
 
@@ -4020,30 +4109,38 @@ function buildScene(key){
     <rect y="${HZ-34}" width="${SW}" height="42" fill="url(#hz)"/>
 
     <rect y="${HZ+6}" width="${SW}" height="${GY-HZ}" fill="url(#gr)"/>
-    ${deco.join("")}
-    <g id="lMid">${dup(mid)}</g>
+    <g id="lPaddy">${tile(deco, 140)}</g>
+    <g id="lMid">${tile(mid, 406)}</g>
     <rect y="${GY-14}" width="${SW}" height="18" fill="${P.grass2}" opacity=".9"/>
-    ${blades}
-    <g id="lNear">${dup(near)}</g>
+    <g id="lBlade">${tile(blades, SW)}</g>
+    <g id="lNear">${tile(near, 208)}</g>
     <g id="lProp">${propStrip.join("")}<g transform="translate(5000 0)">${propStrip.join("")}</g></g>
     <g id="lSign">${sign(0)}${sign(560)}</g>
 
     <rect y="${GY}" width="${SW}" height="${SH-GY}" fill="url(#rd)"/>
     <rect y="${GY}" width="${SW}" height="1.4" fill="#C8C8BE" opacity=".55"/>
     <rect y="${GY+3}" width="${SW}" height="1" fill="#E4E4DA" opacity=".35"/>
-    <g id="lRail">${Array.from({length:40},(_,k)=>`<rect x="${k*22}" y="${GY-8}" width="1.6" height="8" fill="${P.night?"#3A4048":"#9A9A94"}" opacity=".8"/>`).join("")}
-      <rect y="${GY-8}" width="880" height="1.8" fill="${P.night?"#454C54":"#B6B6AE"}" opacity=".8"/></g>
-    <g id="lDash">${Array.from({length:48},(_,k)=>`<rect x="${k*18}" y="${GY+26}" width="10" height="2.2" fill="#D8C87A" opacity=".8"/>`).join("")}</g>
+    <g id="lRail">${tile(Array.from({length:10},(_,k)=>`<rect x="${k*22}" y="${GY-8}" width="1.6" height="8" fill="${P.night?"#3A4048":"#9A9A94"}" opacity=".8"/>`).join("")
+      + `<rect y="${GY-8}" width="221" height="1.8" fill="${P.night?"#454C54":"#B6B6AE"}" opacity=".8"/>`, 220)}</g>
+    <g id="lDash">${tile(Array.from({length:12},(_,k)=>`<rect x="${k*18}" y="${GY+26}" width="10" height="2.2" fill="#D8C87A" opacity=".8"/>`).join(""), 216)}</g>
     <rect y="${SH-5}" width="${SW}" height="5" fill="#2E3036"/>
   </svg>`;
 }
 
 function sign(x){
-  if (!signText) return "";
-  return `<g transform="translate(${x+40} ${GY-1})">
+  return `<g transform="translate(${x+40} ${GY-1})" ${signText ? "" : 'opacity="0"'}>
     <rect x="-1.2" y="-30" width="2.4" height="30" fill="#7E8880"/>
     <rect x="-31" y="-49" width="62" height="20" rx="2" fill="#1E6238" stroke="#DCE6DC" stroke-width=".9"/>
-    <text x="0" y="-35.5" font-size="9" fill="#F0F4F0" text-anchor="middle" font-weight="700">${signText}</text></g>`;
+    <text class="signT" x="0" y="-35.5" font-size="9" fill="#F0F4F0" text-anchor="middle" font-weight="700">${signText}</text></g>`;
+}
+
+/* 고장 이름만 바뀌었을 때 그림을 통째로 다시 그리면 그 순간 화면이 걸린다.
+   표지판 글씨만 갈아 끼운다. */
+function setSign(txt){
+  const sc = $("#scene");
+  if (!sc) return;
+  sc.querySelectorAll(".signT").forEach(t => { t.textContent = txt; });
+  sc.querySelectorAll(".signT").forEach(t => { if (t.parentNode) t.parentNode.removeAttribute("opacity"); });
 }
 
 let skyStamp = "";
@@ -4052,23 +4149,47 @@ function sceneFrame(){
   try { sceneTick(); } catch(e){ /* 멈추지 않는다 */ }
   rafId = requestAnimationFrame(sceneFrame);
 }
+/* 화면은 1초에 60번 그리는데 want 는 0.5초에 한 번만 바뀐다.
+   그 값을 그대로 쓰면 반 초마다 뚝뚝 건너뛰어 슬라이드쇼처럼 보인다 —
+   지금 몇 미터쯤 왔는지 매 프레임 시간으로 직접 계산한다. */
+function sceneM(){
+  if (!startTs) return smoothM;
+  if (waitStart || Date.now() < pausedUntil) return smoothM;     // 서서 물어보는 중
+  const sec  = (Date.now() - startTs) / 1000 * rate - pausedSec;
+  const live = startM + distAt(sec);
+  return Math.min(totalM, Math.max(smoothM, want, live));        // 뒤로는 가지 않는다
+}
+
 function sceneTick(){
   const nowSky = new Date().getHours() < 6 ? "n" : new Date().getHours() < 17 ? "d"
                : new Date().getHours() < 20 ? "e" : "n";
   if (skyStamp && skyStamp !== nowSky) buildScene(curTheme);
   skyStamp = nowSky;
-  if (Date.now() >= pausedUntil) smoothM = want;
+  smoothM = sceneM();
   const px = smoothM * PPM;
-  const mv = (id, w, p) => { const g = document.getElementById(id); if (g) g.setAttribute("transform", `translate(${-((px*p) % w)} 0)`); };
-  if (isPlane()){ mv("lFar", 416, .1); mv("lMid", 434, .28); mv("lNear", 470, .7);
-                  mv("lGround", 504, .05); mv("lSign", 560, .4); }
-  else { mv("lFar", 900, .05); mv("lFar2", 640, .13); mv("lMid", 406, .3); }
-  mv("lCloud", 1610, .028); mv("lProp", 5000, .92); mv("lGround", 504, .22);
-  if (!isPlane()){ mv("lNear", 208, 1); mv("lSign", 560, 1); mv("lRail", 880, 1); mv("lDash", 864, 1.5); }
+  /* 층은 장면을 새로 그릴 때만 바뀐다 — 매 프레임 찾지 말고 붙잡아 둔다.
+     값이 그대로면 아예 건드리지 않아야 브라우저가 다시 그리지 않는다. */
+  const mv = (id, w, p) => {
+    let g = layers[id];
+    if (g === undefined) g = layers[id] = document.getElementById(id);
+    if (!g) return;
+    const v = `translate(${(-((px*p) % w)).toFixed(2)} 0)`;
+    if (g.__v !== v){ g.__v = v; g.setAttribute("transform", v); }
+  };
+  /* 하늘 그림이냐 땅 그림이냐는 "비행기 여행이냐"가 아니라 "지금 하늘에 떠 있느냐"로 정한다.
+     예전에는 인천공항까지 가는 자동차 구간에서도 하늘 규칙을 써서 풍경이 얼어 있었다. */
+  const sky = flying();
+  if (sky){ mv("lFar", 416, .1); mv("lMid", 434, .28); mv("lNear", 470, .7);
+            mv("lGround", 504, .22); mv("lSign", 560, .4); }
+  else { mv("lFar", 900, .05); mv("lFar2", 640, .13); mv("lMid", 406, .3); mv("lPaddy", 140, .5);
+         mv("lCloud", 1610, .028); mv("lProp", 5000, .92);
+         mv("lNear", 208, 1); mv("lBlade", SW, 1.15); mv("lSign", 560, 1);
+         mv("lRail", 220, 1); mv("lDash", 216, 1.5); }
 
-  const t = $("#tunnel");
-  t.style.display = (Date.now() < tunnelUntil) ? "block" : "none";
-  $("#water").style.display = (Date.now() < bridgeUntil) ? "block" : "none";
+  const tn = (Date.now() < tunnelUntil) ? "block" : "none";
+  const wt = (Date.now() < bridgeUntil) ? "block" : "none";
+  if (tunShown !== tn){ tunShown = tn; $("#tunnel").style.display = tn; }
+  if (watShown !== wt){ watShown = wt; $("#water").style.display  = wt; }
 }
 
 function applyView(){
@@ -4080,7 +4201,19 @@ function applyView(){
   if (roadOn){ buildRoad(); panoAt = -1e9; lastPano = null; roadDolly(); }
   else roadDollyStop();
   setAvatar();
-  $("#scene").style.display = sceneOn ? "block" : "none";
+  /* 그림으로 넘어갈 때 — 다 그려서 제 위치에 놓은 다음에 보여준다.
+     빈 화면을 먼저 띄우고 그리면 그 순간 툭 걸리는 것처럼 보인다. */
+  if (sceneOn){
+    const sc = $("#scene");
+    sc.style.opacity = 0;
+    buildScene(curTheme || "hill");
+    try { sceneTick(); } catch(e){}          // 첫 프레임부터 흘러가던 자리에서 시작
+    sc.style.display = "block";
+    requestAnimationFrame(() => { sc.style.opacity = 1; });
+    if (!rafId) rafId = requestAnimationFrame(sceneFrame);
+  } else {
+    $("#scene").style.display = "none";
+  }
   $("#sat").style.display   = satOn ? "block" : "none";
   $("#satzoom").style.display = (viewMode === "map") ? "flex" : "none";
   $("#swap").textContent = (viewMode === "map") ? (roadOK() ? "거리뷰" : "그림")
@@ -4096,13 +4229,42 @@ function applyView(){
       if (!satRaf) satRaf = requestAnimationFrame(satFrame);
     }, 80);
   }
-  if (sceneOn){ buildScene(curTheme || "hill"); if (!rafId) rafId = requestAnimationFrame(sceneFrame); }
+}
+
+/* 뉴욕은 11,000km 다. 진짜 850km/h 로 날면 13시간 —
+   공부가 끝나도 태평양 한가운데다. 하늘 구간만 줄여서
+   앉아 있는 동안 착륙하도록 맞춘다. 땅길(집→공항, 공항→시내)은 손대지 않는다. */
+const isAirLeg = (l) => l.kind === "plane" || l.kind === "boat";
+
+function fitFlightToSession(){
+  if (!legs.length || !legs.some(isAirLeg)) return;
+  legs.forEach(l => { if (l.kmh0 === undefined) l.kmh0 = l.kmh; l.kmh = l.kmh0; });
+
+  const budget = minutes * 60 * rate * 0.8;               // 세션의 8할 안에는 도착한다
+  if (!(budget > 60)) return;
+  const secOf  = (l) => l.len / ((l.kmh || 1) * 1000 / 3600);
+  const air    = legs.filter(isAirLeg), ground = legs.filter(l => !isAirLeg(l));
+  const airLen = air.reduce((a,l) => a + l.len, 0);
+  if (!airLen) return;
+
+  /* 땅길(집→공항, 공항→시내)은 세션의 3할 5푼까지만. 나머지는 하늘 몫. */
+  const gBudget = budget * 0.35;
+  let gSec = ground.reduce((a,l) => a + secOf(l), 0);
+  if (gSec > gBudget && gSec > 0){
+    const f = gSec / gBudget;
+    ground.forEach(l => { l.kmh = l.kmh * f; });
+    gSec = gBudget;
+  }
+  const left = budget - gSec;
+  const need = airLen / left * 3.6;                       // km/h
+  if (need > air[0].kmh) air.forEach(l => { l.kmh = need; });
 }
 
 /* ───────── 주행 ───────── */
 function run(){
   startTs = Date.now();
-  want = startM; pausedSec = 0; legNow = ""; waitStart = 0; askedTour = (startM >= travelEndM);
+  try { fitFlightToSession(); } catch(e){}
+  want = startM; smoothM = startM; pausedSec = 0; legNow = ""; waitStart = 0; askedTour = (startM >= travelEndM);
   sessStart = travelled; sessRest = 0; sessTunnel = 0; seenSigun = []; arrivedShown = false;
   lastRegion = ""; paintTrail();
   startEvents();
@@ -4147,15 +4309,16 @@ function tick(){
   if (Date.now() < pausedUntil) return;              // 정차 중
   want = Math.max(want, Math.min(totalM, startM + distAt(elapsed - pausedSec)));
 
-  /* 목적지에 닿으면 구경할지 물어본다 */
+  /* 목적지에 닿으면 묻지 않고 그대로 그 도시를 둘러보러 간다.
+     팝업을 띄우면 공부하다 말고 폰을 만져야 해서 여행이 거기서 끊긴다. */
   if (!askedTour && travelEndM > 1000 && want >= travelEndM - 60 && spots.length){
     askedTour = true;
-    waitStart = Date.now();
-    $("#arriveName").textContent = (to ? to.name : "도착지") + " 도착!";
-    $("#arriveSub").textContent = "여기 구경할래?";
-    fillArrive();
-    $("#arrive").style.display = "flex";
+    waitStart = Date.now();                       // 걸어갈 길을 만드는 동안만 잠깐
+    banner((to ? to.name : "도착지") + " 도착!", "이제 여기를 둘러보자");
     try { navigator.vibrate?.([200,90,200]); } catch(e){}
+    fillArrive();                                 // 명소 목록만 채워 두고 팝업은 띄우지 않는다
+    $("#arrive").style.display = "none";
+    onArriveYes();
     return;
   }
   if (want - travelled >= stepM() || (want >= totalM && travelled < totalM)) jump(want);
@@ -4186,6 +4349,12 @@ function jumpInner(m){
       setAvatar();
       if ((leg === "plane" || leg === "boat") && groundM > 0 && prev)
         banner(depName, leg === "boat" ? "이제 배를 탑니다" : "이제 비행기를 탑니다");
+      /* 이륙하면 창밖(구름) 그림으로, 착륙하면 다시 땅 화면으로.
+         예전에는 거리뷰인 채로 떠서 한국 골목 사진이 태평양 위에 그대로 붙어 있었다. */
+      if (leg === "plane" && viewMode !== "draw"){ viewMode = "draw"; applyView(); }
+      else if (prev === "plane" && leg !== "plane" && viewMode === "draw"){
+        viewMode = roadOK() ? "road" : "map"; applyView();
+      }
       if (leg === "train"){
         if (prev) banner(depName || "기차를 탔어",
                          "이제 기차를 탑니다" + (arrName ? " · " + arrName + "까지" : ""));
@@ -4244,7 +4413,11 @@ function jumpInner(m){
         let th = themeOf(sido, sigun, dong);
         if (legNow === "train" && th === "metro") th = "plain";   // 기차 창밖은 시골로
         banner(sigun + " 진입", THEMES[th].note);
-        if (sceneOn) buildScene(th); else curTheme = th;
+        /* 풍경 종류가 진짜 바뀔 때만 다시 그린다 — 고장 이름만 바뀌면 표지판만 갈아 끼운다.
+           매번 새로 그리면 시·군을 넘을 때마다 화면이 한 번씩 걸린다. */
+        if (sceneOn && th !== curTheme){ buildScene(th); try { sceneTick(); } catch(e){} }
+        else if (sceneOn) setSign(signText);
+        else curTheme = th;
       }
     });
   }
@@ -4275,9 +4448,8 @@ function jumpInner(m){
     hit.seen = true;
     eventName = hit.name;
     if (hit.kind === "rest"){
-      banner(hit.name, `${STOP_SEC}초 쉬었다 갑니다`);
-      pausedUntil = Date.now() + STOP_SEC * 1000 / rate;
-      pausedSec += STOP_SEC;
+      /* 세우지 않는다 — 공부하는 동안은 한 번도 멈추지 않고 계속 간다 */
+      banner(hit.name, "그냥 지나갑니다");
       sessRest++;
     } else if (hit.kind === "tunnel"){
       banner(hit.name, "터널을 지납니다");
@@ -4311,20 +4483,10 @@ function banner(title, sub){
   setTimeout(() => b.style.opacity = 0, 4000);
 }
 
-/* ───────── 중단 / 종료 ───────── */
-let holdBound = false;
-function bindHold(){
-  if (holdBound) return;        // buildMap 이 여러 번 불려도 한 번만 (두 배로 빨리 차던 문제)
-  holdBound = true;
-  const btn = $("#stop"), fill = btn.querySelector("i");
-  const down = () => { clearInterval(holdTimer); holdTimer = setInterval(() => {
-      hold += 4; fill.style.width = hold + "%";
-      if (hold >= 100){ up(); end(false); }
-    }, 60); };
-  const up = () => { clearInterval(holdTimer); hold = 0; fill.style.width = 0; };
-  btn.addEventListener("mousedown", down); btn.addEventListener("touchstart", down, {passive:true});
-  ["mouseup","mouseleave","touchend","touchcancel"].forEach(e => btn.addEventListener(e, up));
-}
+/* ───────── 종료 ───────── */
+/* "길게 눌러 중단" 은 없앴다 — 가는 중에 그만두는 버튼이 있으면 자꾸 눈이 간다.
+   시간이 다 되면 알아서 끝난다. */
+function bindHold(){}
 
 function end(ok){
   if (finished) return;
