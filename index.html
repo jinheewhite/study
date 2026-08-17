@@ -358,7 +358,7 @@
 </div>
 
 <div class="wrap" id="setup" style="display:none">
-  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v75</span></p>
+  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v76</span></p>
   <div id="dots"></div>
 
   <section class="step" data-step="1">
@@ -1744,31 +1744,75 @@ function toggleMusic(){
 }
 
 /* ═══════════ 도착지 구경 ═══════════ */
+
+/* 유명한 곳을 앞으로 — "몇 개 언어로 실려 있나" 가 가장 잘 맞는 잣대다.
+   콜로세움은 138개 언어, 바로 옆 "게모니아이 계단" 은 두어 개뿐이다.
+   조회수는 못 믿는다 (타임스퀘어가 0 으로 나온다).
+   한 번에 다 오지 않고 잘려서 오므로 이어받아 채운다. */
+/* 위키백과는 몰아서 부르면 429(너무 잦음) 로 막는다. 막히면 잠깐 쉬고 한 번만 더.
+   그래도 안 되면 null 을 돌려주고, 부르는 쪽이 그것 없이도 굴러가게 한다. */
+async function wikiJson(url){
+  for (let t = 0; t < 2; t++){
+    try {
+      const r = await fetch(url);
+      if (r.status === 429){ await new Promise(s => setTimeout(s, 900)); continue; }
+      return await r.json();
+    } catch(e){ await new Promise(s => setTimeout(s, 500)); }
+  }
+  return null;
+}
+
+async function fameByLang(base, ids){
+  const count = {};
+  let cont = "";
+  for (let r = 0; r < 4; r++){            // 보통 두세 번이면 다 채워진다
+    const u = `${base}?action=query&pageids=${ids.join("|")}`
+            + `&prop=langlinks&lllimit=max&format=json&origin=*${cont}`;
+    const d = await wikiJson(u);
+    if (!d) break;                        // 못 세면 가까운 순서 그대로 간다
+    Object.values(d.query?.pages || {}).forEach(p => {
+      count[p.pageid] = (count[p.pageid] || 0) + ((p.langlinks || []).length);
+    });
+    const c = d.continue && d.continue.llcontinue;
+    if (!c) break;
+    cont = "&llcontinue=" + encodeURIComponent(c);
+  }
+  return count;
+}
+
+/* 장소가 아닌 것 — 사건·작품·목록. 좌표는 그 자리에 찍혀 있어도 걸어가서 볼 것이 없다.
+   ("노트르담 대성당 화재" 같은 것이 대성당보다 위로 오곤 했다) */
+const NOT_PLACE = /(화재|사건|사고|폭발|테러|인질|사태|시위|전투|조약|학살|목록|연표|점령|봉기|혁명|올림픽|경기|영화|음반|업무 지구|자치구|광역시|특별시|commune|empire|arrondissement|\bday in\b|attack|bombing|\bfire\b|massacre|siege|hostage|crisis|treaty|battle|election|census|list of|timeline|history of|\bfilm\b|\(song\)|photograph|festival|business district|borough|prefecture)/i;
+
 /* 위키백과에서 좌표 주변 명소와 사진을 가져옵니다. 키가 필요 없고 무료입니다. */
 async function wikiNear(lat, lng, lang){
   const base = `https://${lang}.wikipedia.org/w/api.php`;
+  /* 50 이 한 번에 물어볼 수 있는 최대치다 — 100 을 보내면 통째로 실패한다 */
   const geo = `${base}?action=query&list=geosearch&gscoord=${lat}%7C${lng}`
-            + `&gsradius=10000&gslimit=30&format=json&origin=*`;   // 10km 가 위키백과 최대치
-  const g = await (await fetch(geo)).json();
-  const near = g.query?.geosearch || [];
-  const pos = {};
-  near.forEach(x => pos[x.pageid] = { lat:x.lat, lng:x.lon });
-  const ids = near.map(x => x.pageid);
+            + `&gsradius=10000&gslimit=50&format=json&origin=*`;   // 10km 가 위키백과 최대치
+  const g = await wikiJson(geo);
+  const near = g?.query?.geosearch || [];
+  const pos = {}, rank = {};
+  near.forEach((x, i) => { pos[x.pageid] = { lat:x.lat, lng:x.lon }; rank[x.pageid] = i; });
+  const ids = near.map(x => x.pageid).slice(0, 50);
   if (!ids.length) return [];
   /* 가까운 순서로 두면 타임스퀘어 옆 잡다한 건물이 먼저 잡힌다.
-     조회수를 같이 받아서 "사람들이 많이 찾아본 곳" 순서로 세운다 — 그게 유명한 곳이다. */
+     몇 개 언어로 실려 있는지로 세워야 콜로세움·타임스퀘어가 앞에 온다. */
   const det = `${base}?action=query&pageids=${ids.join("|")}`
-            + `&prop=pageimages|extracts|pageviews&piprop=thumbnail&pithumbsize=900`
-            + `&pvipdays=30&exintro=1&explaintext=1&exsentences=2&format=json&origin=*`;
-  const d = await (await fetch(det)).json();
-  const views = (p) => Object.values(p.pageviews || {})
-    .reduce((a, v) => a + (v || 0), 0);
-  return Object.values(d.query?.pages || {})
+            + `&prop=pageimages|extracts&piprop=thumbnail&pithumbsize=900`
+            + `&exintro=1&explaintext=1&exsentences=2&format=json&origin=*`;
+  const [d, fame] = await Promise.all([
+    wikiJson(det),
+    fameByLang(base, ids),
+  ]);
+  return Object.values(d?.query?.pages || {})
     .filter(p => p.thumbnail && p.thumbnail.source)
     .map(p => ({ title:p.title, desc:(p.extract || "").trim(), img:p.thumbnail.source,
-                 lat:pos[p.pageid]?.lat, lng:pos[p.pageid]?.lng, fame:views(p) }))
-    .filter(p => p.lat && p.lng)
-    .sort((a, b) => b.fame - a.fame)
+                 lat:pos[p.pageid]?.lat, lng:pos[p.pageid]?.lng,
+                 fame:fame[p.pageid] || 0, near:rank[p.pageid] ?? 999 }))
+    .filter(p => p.lat && p.lng && !NOT_PLACE.test(p.title))
+    /* 유명한 순서. 못 셌으면(요청이 막혔으면) 가까운 순서로 내려앉는다 */
+    .sort((a, b) => (b.fame - a.fame) || (a.near - b.near))
     .slice(0, 8);
 }
 
@@ -2626,16 +2670,21 @@ async function loadRoute(){
   const city = touring ? from : to;
   let list = [];
   try {
+    /* 언어판 수를 이어받아 세느라 예전보다 몇 초 더 걸린다 */
     list = await Promise.race([
       landmarks(city.lat, city.lng),
-      new Promise(r => setTimeout(() => r([]), 7000)),
+      new Promise(r => setTimeout(() => r([]), 13000)),
     ]);
   } catch(e){}
 
   /* 유명한 순서로 다섯 곳을 고른 다음, 걷는 길은 가까운 곳부터 이어 준다.
      이름값 순서 그대로 걸으면 타임스퀘어에서 자유의 여신상으로 갔다가 다시
      올라오는 식으로 왔다 갔다 한다. */
-  let pool = list.filter(x => x.lat && x.lng).slice(0, 8);
+  /* 도시 자체를 다룬 글("파리 (프랑스)")은 걸어가서 볼 곳이 아니다 */
+  const cityName = (city.name || "").replace(/\s*\(.*\)$/, "").trim();
+  let pool = list.filter(x => x.lat && x.lng)
+                 .filter(x => x.title.replace(/\s*\(.*\)$/, "").trim() !== cityName)
+                 .slice(0, 8);
   const order = [];
   let head = { lat:city.lat, lng:city.lng };
   while (pool.length && order.length < 5){
