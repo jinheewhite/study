@@ -229,6 +229,9 @@
   #mini{position:absolute;right:10px;top:54px;width:24vw;max-width:124px;height:30vw;max-height:155px;z-index:4;
        border-radius:14px;overflow:hidden;border:1px solid #ffffff55;box-shadow:0 8px 26px #000a;
        transition:width .28s ease,height .28s ease,right .28s ease,top .28s ease}
+  /* 지구 반 바퀴짜리 항로는 124px 로 좁다 — 세계 지도일 때만 조금 키운다.
+     (.big 규칙이 뒤에 와야 눌러서 크게 보기가 그대로 먹는다) */
+  #mini.world{width:42vw;max-width:200px;height:30vw;max-height:150px}
   #mini.big{width:88vw;max-width:600px;height:104vw;max-height:660px;right:6vw;top:16%}
   #mini:after{content:"";position:absolute;right:7px;bottom:7px;width:16px;height:16px;
        border-right:2px solid #ffffffcc;border-bottom:2px solid #ffffffcc;border-radius:0 0 4px 0;opacity:.75}
@@ -350,7 +353,7 @@
 </div>
 
 <div class="wrap" id="setup" style="display:none">
-  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v70</span></p>
+  <p class="eyebrow" id="brand">창밖 여행 <span id="ver">v71</span></p>
   <div id="dots"></div>
 
   <section class="step" data-step="1">
@@ -2816,23 +2819,41 @@ function fitMini(){
 let miniWorld = null, miniWline = null, miniWdot = null;
 
 /* 해외 여정이면 작은 지도를 세계 지도로 (항로 전체가 보이게) */
+/* 태평양을 건너는 길은 날짜변경선에서 경도가 167 → -179 로 튄다.
+   그대로 재면 폭이 346° — "지구를 반대로 한 바퀴" 로 잡혀서, 정작 가는 길인
+   태평양은 안 보이고 아시아만 크게 비춘다. 이어지도록 펴서 재야 한다. */
+let wrapBase = 0;
+function uLng(lng){
+  let v = lng;
+  while (v - wrapBase < -180) v += 360;
+  while (v - wrapBase >  180) v -= 360;
+  return v;
+}
+const uPt = (q) => [q.lat, uLng(q.lng)];
+
 function buildMiniWorld(){
   if (miniWorld || typeof L === "undefined") return false;
   $("#mini").innerHTML = "";
+  $("#mini").classList.add("world");     // 지구 반 바퀴짜리 길이라 조금 키운다
   miniWorld = L.map($("#mini"), { zoomControl:false, attributionControl:false, dragging:false,
-                                  scrollWheelZoom:false, doubleClickZoom:false, keyboard:false });
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom:8, minZoom:1 }).addTo(miniWorld);
-  const pts = path.filter((_,i) => i % Math.max(1, Math.ceil(path.length/400)) === 0)
-                  .map(q => [q.lat, q.lng]);
+                                  scrollWheelZoom:false, doubleClickZoom:false, keyboard:false,
+                                  minZoom:0, worldCopyJump:false });
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom:8, minZoom:0 }).addTo(miniWorld);
+  wrapBase = (path[0] || from).lng;
+  const pts = path.filter((_,i) => i % Math.max(1, Math.ceil(path.length/400)) === 0).map(uPt);
   L.polyline(pts, { color:"#C08A50", weight:2, opacity:.75, dashArray:"4 5" }).addTo(miniWorld);
   miniWline = L.polyline([], { color:"#E4572E", weight:3 }).addTo(miniWorld);
-  L.circleMarker([to.lat, to.lng], { radius:4, color:"#0C1719", weight:2,
-                                     fillColor:"#7FD4C1", fillOpacity:1 }).addTo(miniWorld);
-  miniWdot = L.circleMarker([from.lat, from.lng], { radius:4, color:"#fff", weight:2,
-                                     fillColor:"#E4572E", fillOpacity:1 }).addTo(miniWorld);
-  miniWorld.fitBounds(L.latLngBounds(pts), { padding:[26,26] });
-  [0,150,500].forEach(t => setTimeout(() => { try { miniWorld.invalidateSize();
-    miniWorld.fitBounds(L.latLngBounds(pts), { padding:[26,26] }); } catch(e){} }, t));
+  L.circleMarker(uPt(to), { radius:4, color:"#0C1719", weight:2,
+                            fillColor:"#7FD4C1", fillOpacity:1 }).addTo(miniWorld);
+  miniWdot = L.circleMarker(uPt(from), { radius:4, color:"#fff", weight:2,
+                            fillColor:"#E4572E", fillOpacity:1 }).addTo(miniWorld);
+  /* 출발지도 도착지도 다 들어오게. 여백을 넉넉히 줘서 가장자리에 붙지 않도록. */
+  const fit = () => { try {
+    miniWorld.invalidateSize();
+    miniWorld.fitBounds(L.latLngBounds(pts), { padding:[10,10] });
+  } catch(e){} };
+  fit();
+  [0, 150, 500, 1200].forEach(t => setTimeout(fit, t));
   return true;
 }
 
@@ -3855,20 +3876,29 @@ function satTick(){
   if (satDone) satDone.setPath(done.map(d => new kakao.maps.LatLng(d.lat, d.lng)));
 }
 
-/* 세계 지도 */
+/* 세계 지도 — 날짜변경선에서 경도가 튀므로 uLng 로 펴서 그린다.
+   그러지 않으면 폭이 346° 로 잡혀 태평양 대신 아시아만 크게 나온다. */
 function buildWorldMap(){
   $("#mini").innerHTML = "";
+  $("#mini").classList.add("world");
+  wrapBase = (path[0] || from).lng;
   wmap = L.map($("#mini"), { zoomControl:false, attributionControl:false, dragging:false,
-                             scrollWheelZoom:false, doubleClickZoom:false, keyboard:false });
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 8 }).addTo(wmap);
-  const pts = path.map(p => [p.lat, p.lng]);
+                             scrollWheelZoom:false, doubleClickZoom:false, keyboard:false,
+                             minZoom:0, worldCopyJump:false });
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom:8, minZoom:0 }).addTo(wmap);
+  const pts = path.map(uPt);
   L.polyline(pts, { color:"#C08A50", weight:2, opacity:.7, dashArray:"5 6" }).addTo(wmap);
   wline = L.polyline([], { color:"#E4572E", weight:3 }).addTo(wmap);
-  L.circleMarker([to.lat, to.lng], { radius:5, color:"#0C1719", weight:2,
-                                     fillColor:"#7FD4C1", fillOpacity:1 }).addTo(wmap);
-  wdot = L.circleMarker([from.lat, from.lng], { radius:5, color:"#fff", weight:2,
-                                                fillColor:"#E4572E", fillOpacity:1 }).addTo(wmap);
-  wmap.fitBounds(L.latLngBounds(pts), { padding:[18,18] });
+  L.circleMarker(uPt(to), { radius:5, color:"#0C1719", weight:2,
+                            fillColor:"#7FD4C1", fillOpacity:1 }).addTo(wmap);
+  wdot = L.circleMarker(uPt(from), { radius:5, color:"#fff", weight:2,
+                                     fillColor:"#E4572E", fillOpacity:1 }).addTo(wmap);
+  const fit = () => { try {
+    wmap.invalidateSize();
+    wmap.fitBounds(L.latLngBounds(pts), { padding:[10,10] });
+  } catch(e){} };
+  fit();
+  [0, 150, 500, 1200].forEach(t => setTimeout(fit, t));
 }
 
 /* ═══════════ 그림 풍경 ═══════════ */
@@ -4414,12 +4444,12 @@ function jumpInner(m){
   if (viewMode === "road") roadStep(p);
   faceAvatar(p.pan);
   if (miniWorld && miniWdot){
-    miniWdot.setLatLng([p.lat, p.lng]);
+    miniWdot.setLatLng(uPt(p));                       // 날짜변경선 넘어서도 같은 자리에
     if (miniWline) miniWline.setLatLngs(
-      path.filter((q,i) => cum[i] <= m && i % 6 === 0).map(q => [q.lat, q.lng]).concat([[p.lat, p.lng]]));
+      path.filter((q,i) => cum[i] <= m && i % 6 === 0).map(uPt).concat([uPt(p)]));
   } else if (wdot && wline){
-    wdot.setLatLng([p.lat, p.lng]);
-    wline.setLatLngs(path.filter((q,i) => cum[i] <= m && i % 4 === 0).map(q => [q.lat, q.lng]).concat([[p.lat, p.lng]]));
+    wdot.setLatLng(uPt(p));
+    wline.setLatLngs(path.filter((q,i) => cum[i] <= m && i % 4 === 0).map(uPt).concat([uPt(p)]));
   } else if (mini && miniDot){
   miniDot.setPosition(pos);
   miniLine.setPath(path.filter((q,i) => cum[i] <= m && i % 4 === 0).map(q => new kakao.maps.LatLng(q.lat, q.lng)).concat([pos]));
